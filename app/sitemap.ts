@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { products } from "../data/products";
-
+export const dynamic = "force-static";
 const guides = [
   "cozy-bedroom-ideas",
   "small-kitchen-organization",
@@ -11,7 +11,7 @@ const guides = [
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "http://localhost:3000";
+  const baseUrl = "https://home-and-haven.pages.dev";
 
   const staticPages: MetadataRoute.Sitemap = [
     {

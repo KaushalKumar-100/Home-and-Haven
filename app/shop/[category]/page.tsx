@@ -2,7 +2,20 @@ import Link from "next/link";
 import { products } from "@/data/products";
 import ProductCard from "@/app/components/ProductCard";
 import Navbar from "@/app/components/Navbar";
+
+export async function generateStaticParams() {
+  return [
+    { category: "home-decor" },
+    { category: "kitchen" },
+    { category: "bedroom" },
+    { category: "organization" },
+    { category: "lighting" },
+  ];
+}
+
+
 const categoryData: Record<
+
   string,
   {
     title: string;

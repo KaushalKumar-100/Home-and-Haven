@@ -11,7 +11,7 @@ export default function ProductCard({ product }: ProductCardProps) {
     <article className="overflow-hidden rounded-3xl border border-[#e8e4dc] bg-white transition duration-300 hover:-translate-y-1 hover:shadow-lg">
       <div className="relative h-64 overflow-hidden bg-[#eee9df]">
         <Image
-          src={product.image}
+          src={product.image[0]}
           alt={product.name}
           fill
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

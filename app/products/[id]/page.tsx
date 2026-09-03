@@ -91,7 +91,7 @@ export default async function ProductPage({ params }: Props) {
         {/* Image */}
         <div className="relative aspect-square overflow-hidden rounded-[2rem] bg-white">
           <Image
-            src={product.image}
+            src={product.image[0]}
             alt={product.name}
             fill
             priority
@@ -181,7 +181,7 @@ export default async function ProductPage({ params }: Props) {
                 >
                   <div className="relative aspect-[4/3] overflow-hidden">
                     <Image
-                      src={relatedProduct.image}
+                      src={relatedProduct.image[0]}
                       alt={relatedProduct.name}
                       fill
                       sizes="(max-width: 768px) 100vw, 33vw"

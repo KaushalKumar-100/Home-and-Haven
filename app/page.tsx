@@ -219,7 +219,7 @@ export default function Home() {
               >
                 <div className="relative h-72 overflow-hidden bg-[#eee9df]">
                   <Image
-                    src={product.image}
+                    src={product.image[0]}
                     alt={product.name}
                     fill
                     sizes="(max-width: 768px) 100vw, 33vw"

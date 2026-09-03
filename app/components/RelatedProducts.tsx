@@ -44,7 +44,7 @@ export default function RelatedProducts({
             <Link href={`/products/${product.id}`}>
               <div className="relative aspect-[4/3] overflow-hidden">
                 <Image
-                  src={product.image[0]}
+                  src={product.images[0]}
                   alt={product.name}
                   fill
                   sizes="(max-width: 640px) 100vw, 50vw"

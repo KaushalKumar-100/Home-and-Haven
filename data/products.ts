@@ -5,7 +5,7 @@ export type Product = {
   price: string;
   description: string;
   emoji: string;
-  image: string[];
+  images: string[];
   affiliateUrl: string;
   featured: boolean;
   badge?: string;
@@ -27,7 +27,7 @@ export const products: Product[] = [
     description:
       "A simple ceramic vase that adds a calm, modern touch to shelves, tables, and bedside spaces.",
     emoji: "🏺",
-    image: ["/products/minimalist-vase.jpg"],
+    images: ["/products/minimalist-vase.jpg",],
     affiliateUrl: "#",
     featured: true,
     badge: "Editor's Pick",
@@ -41,7 +41,7 @@ export const products: Product[] = [
     description:
       "A warm decorative lamp designed to create a cozy atmosphere in bedrooms, living rooms, and reading corners.",
     emoji: "💡",
-    image:[ "/products/table-lamp.jpg"],
+    images:[ "/products/table-lamp.jpg",],
     affiliateUrl: "#",
     featured: true,
     badge: "Popular",
@@ -55,7 +55,7 @@ export const products: Product[] = [
     description:
       "A practical bamboo organizer for keeping kitchen counters, drawers, and cabinets neat.",
     emoji: "🍳",
-    image: ["/products/kitchen-organizer.jpg"],
+    images: ["/products/kitchen-organizer.jpg",],
     affiliateUrl: "#",
     featured: true,
     badge: "Best Value",
@@ -69,7 +69,7 @@ export const products: Product[] = [
     description:
       "A compact bedside table that combines useful storage with a clean, minimalist design.",
     emoji: "🛏️",
-    image:[ "/products/bedside-table.jpg"],
+    images:[ "/products/bedside-table.jpg",],
     affiliateUrl: "#",
     featured: true,
   },
@@ -82,7 +82,7 @@ export const products: Product[] = [
     description:
       "A space-saving storage solution for clothes, accessories, toys, documents, and everyday items.",
     emoji: "📦",
-    image: ["/products/storage-box.jpg"],
+    images: ["/products/storage-box.jpg",],
     affiliateUrl: "#",
     featured: false,
   },
@@ -95,7 +95,7 @@ export const products: Product[] = [
     description:
       "A decorative wall mirror that can make smaller spaces feel brighter, larger, and more refined.",
     emoji: "🪞",
-    image: ["/products/wall-mirror.jpg"],
+    images: ["/products/wall-mirror.jpg",],
     affiliateUrl: "#",
     featured: true,
     badge: "Trending",
@@ -109,7 +109,7 @@ export const products: Product[] = [
   description:
     "A rustic 6-piece wall decor set with motivational messages, designed to add character to living rooms, bedrooms, and other cozy spaces.",
   emoji: "🪵",
-  image: ["/products/birch-wall-decor.jpg"],
+  images: ["/products/birch-wall-decor.jpg",],
   affiliateUrl: "https://link.amazon/B0imSBni5",
   featured: true,
   badge: "Budget Pick",

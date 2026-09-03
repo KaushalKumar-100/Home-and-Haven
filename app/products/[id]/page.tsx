@@ -1,11 +1,10 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-
+import ProductGallery from "@/app/components/ProductGallery";
 import { products } from "@/data/products";
 import AffiliateButton from "@/app/components/AffiliateButton";
-
+import Image from "next/image";
 type Props = {
   params: Promise<{ id: string }>;
 };
@@ -89,16 +88,10 @@ export default async function ProductPage({ params }: Props) {
       {/* Product */}
       <section className="mx-auto grid max-w-6xl gap-12 px-6 pb-20 pt-10 md:grid-cols-2 md:items-center">
         {/* Image */}
-        <div className="relative aspect-square overflow-hidden rounded-[2rem] bg-white">
-          <Image
-            src={product.image[0]}
-            alt={product.name}
-            fill
-            priority
-            sizes="(max-width: 768px) 100vw, 50vw"
-            className="object-cover"
-          />
-        </div>
+        <ProductGallery
+          images={product.images}
+          productName={product.name}
+        />
 
         {/* Details */}
         <div>
@@ -181,7 +174,7 @@ export default async function ProductPage({ params }: Props) {
                 >
                   <div className="relative aspect-[4/3] overflow-hidden">
                     <Image
-                      src={relatedProduct.image[0]}
+                      src={relatedProduct.images[0]}
                       alt={relatedProduct.name}
                       fill
                       sizes="(max-width: 768px) 100vw, 33vw"

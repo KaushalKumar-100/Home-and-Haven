@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 
   creator: "Home & Haven",
 
-  metadataBase: new URL("http://localhost:3000"),
+  metadataBase: new URL("https://home-and-haven.pages.dev"),
 
   openGraph: {
     title: "Home & Haven | Beautiful Ideas for a Home You Love",

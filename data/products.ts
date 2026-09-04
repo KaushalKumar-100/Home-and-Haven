@@ -33,20 +33,36 @@ export const products: Product[] = [
     badge: "Editor's Pick",
   },
 
-  {
-    id: "decorative-table-lamp",
-    name: "Decorative Table Lamp",
-    category: "lighting",
-    price: "₹1,299",
-    description:
-      "A warm decorative lamp designed to create a cozy atmosphere in bedrooms, living rooms, and reading corners.",
-    emoji: "💡",
-    images:[ "/products/table-lamp.jpg",],
-    affiliateUrl: "#",
-    featured: true,
-    badge: "Popular",
-  },
-
+ {
+  id: "decorative-table-lamp",
+  name: "FLYNGO Touch Control LED Night Light Table Lamp",
+  category: "lighting",
+  price: "₹345",
+  originalPrice: "₹999",
+  description:
+    "A touch-control LED night light table lamp with adjustable brightness and USB rechargeable design, suitable for bedrooms, living rooms, studies, and other indoor spaces.",
+  emoji: "💡",
+  images: ["FLYNGO Touch Control LED Night Light Table Lamp",
+            'FLYNGO Touch Control LED Night Light Table Lamp1',
+            'FLYNGO Touch Control LED Night Light Table Lamp2',
+            'FLYNGO Touch Control LED Night Light Table Lamp3'
+  ],
+  affiliateUrl: "https://link.amazon/B05eMAnYg",
+  featured: true,//top pick
+  badge: "Amazon's Choice",
+  retailer: "Amazon.in",
+  rating: 4.1,
+  reviewCount: 1589,
+  tags: [
+    "night light",
+    "table lamp",
+    "LED lamp",
+    "touch control lamp",
+    "bedroom lighting",
+    "rechargeable lamp",
+    "home lighting",
+  ],
+},
   {
     id: "bamboo-kitchen-organizer",
     name: "Bamboo Kitchen Organizer",

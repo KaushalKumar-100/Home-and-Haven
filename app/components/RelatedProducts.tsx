@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 
 import { products } from "@/data/products";
-
+import AmazonDisclosure from "@/app/components/AmazonDisclosure";
 type RelatedProductsProps = {
   productIds: string[];
 };
@@ -35,59 +35,64 @@ export default function RelatedProducts({
         </p>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        {relatedProducts.map((product) => (
-          <div
-            key={product.id}
-            className="overflow-hidden rounded-[1.5rem] border border-[#e8e4dc] bg-white"
+<div className="grid gap-6 sm:grid-cols-2">
+  {relatedProducts.map((product) => (
+    <div
+      key={product.id}
+      className="overflow-hidden rounded-[1.5rem] border border-[#e8e4dc] bg-white"
+    >
+      <Link href={`/products/${product.id}`}>
+        <div className="relative aspect-[4/3] overflow-hidden">
+          <Image
+            src={product.images[0]}
+            alt={product.name}
+            fill
+            sizes="(max-width: 640px) 100vw, 50vw"
+            className="object-cover transition duration-500 hover:scale-105"
+          />
+        </div>
+      </Link>
+
+      <div className="p-5">
+        {product.badge && (
+          <span className="text-xs font-medium uppercase tracking-wider text-[#8b806f]">
+            {product.badge}
+          </span>
+        )}
+
+        <h3 className="mt-2 text-lg font-semibold">
+          {product.name}
+        </h3>
+
+        <p className="mt-2 text-sm leading-6 text-[#716d64]">
+          {product.description}
+        </p>
+
+        <div className="mt-5 flex items-center justify-between">
+          <span className="font-medium">{product.price}</span>
+
+          <Link
+            href={`/products/${product.id}`}
+            className="rounded-full bg-[#292722] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#4a4740]"
           >
-            <Link href={`/products/${product.id}`}>
-              <div className="relative aspect-[4/3] overflow-hidden">
-                <Image
-                  src={product.images[0]}
-                  alt={product.name}
-                  fill
-                  sizes="(max-width: 640px) 100vw, 50vw"
-                  className="object-cover transition duration-500 hover:scale-105"
-                />
-              </div>
-            </Link>
-
-            <div className="p-5">
-              {product.badge && (
-                <span className="text-xs font-medium uppercase tracking-wider text-[#8b806f]">
-                  {product.badge}
-                </span>
-              )}
-
-              <h3 className="mt-2 text-lg font-semibold">
-                {product.name}
-              </h3>
-
-              <p className="mt-2 text-sm leading-6 text-[#716d64]">
-                {product.description}
-              </p>
-
-              <div className="mt-5 flex items-center justify-between">
-                <span className="font-medium">{product.price}</span>
-
-                <Link
-                  href={`/products/${product.id}`}
-                  className="rounded-full bg-[#292722] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#4a4740]"
-                >
-                  View Product →
-                </Link>
-              </div>
-            </div>
-          </div>
-        ))}
+            View Product →
+          </Link>
+        </div>
       </div>
+    </div>
+  ))}
+</div>
 
-      <p className="mt-5 text-xs leading-5 text-[#8b877f]">
-        Some product links on Home & Haven may be affiliate links. We may
-        earn a small commission if you purchase through them, at no
-        additional cost to you.
-      </p>
+{/* Amazon disclosure — once for the whole section */}
+<div className="mt-6">
+  <AmazonDisclosure />
+</div>
+
+<p className="mt-5 text-xs leading-5 text-[#8b877f]">
+  Some product links on Home & Haven may be affiliate links. We may
+  earn a small commission if you purchase through them, at no
+  additional cost to you.
+</p>
     </section>
   );
 }

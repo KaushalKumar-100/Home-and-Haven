@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import ProductGallery from "@/app/components/ProductGallery";
 import { products } from "@/data/products";
+import AmazonDisclosure from "@/app/components/AmazonDisclosure";
 import AffiliateButton from "@/app/components/AffiliateButton";
 import Image from "next/image";
 type Props = {
@@ -136,6 +137,9 @@ export default async function ProductPage({ params }: Props) {
             <AffiliateButton
               affiliateUrl={product.affiliateUrl}
             />
+            <div className="mt-3">
+              <AmazonDisclosure />
+            </div>
 
             <p className="mt-4 text-xs leading-5 text-[#8b877f]">
               Prices and availability may change. Please check the

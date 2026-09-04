@@ -10,7 +10,7 @@ type Props = {
   params: Promise<{ id: string }>;
 };
 
-export async function generateStaticParams() {
+export  function generateStaticParams() {
   return products.map((product) => ({
     id: product.id,
   }));

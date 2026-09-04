@@ -3,7 +3,7 @@ import { products } from "@/data/products";
 import ProductCard from "@/app/components/ProductCard";
 import Navbar from "@/app/components/Navbar";
 
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [
     { category: "home-decor" },
     { category: "kitchen" },

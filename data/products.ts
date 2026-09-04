@@ -42,11 +42,12 @@ export const products: Product[] = [
   description:
     "A touch-control LED night light table lamp with adjustable brightness and USB rechargeable design, suitable for bedrooms, living rooms, studies, and other indoor spaces.",
   emoji: "💡",
-  images: ["FLYNGO Touch Control LED Night Light Table Lamp",
-            'FLYNGO Touch Control LED Night Light Table Lamp1',
-            'FLYNGO Touch Control LED Night Light Table Lamp2',
-            'FLYNGO Touch Control LED Night Light Table Lamp3'
-  ],
+  images: [
+  "/products/FLYNGO Touch Control LED Night Light Table Lamp.jpg",
+  "/products/FLYNGO Touch Control LED Night Light Table Lamp1.jpg",
+  "/products/FLYNGO Touch Control LED Night Light Table Lamp2.jpg",
+  "/products/FLYNGO Touch Control LED Night Light Table Lamp3.jpg",
+],
   affiliateUrl: "https://link.amazon/B05eMAnYg",
   featured: true,//top pick
   badge: "Amazon's Choice",

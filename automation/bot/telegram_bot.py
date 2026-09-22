@@ -294,6 +294,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE, url: st
             "price": "",
             "affiliate": "",
             "features": "",
+            "images": [],
             "state": "name",
             "created_at": datetime.now(timezone.utc).isoformat(),
         },
@@ -364,20 +365,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if state == "features":
         draft["features"] = "" if text.upper() == "SKIP" else clean_text(text, 500)
-        draft["state"] = "image"
+        draft["state"] = "images"
+        draft["images"] = []
         set_draft(update.effective_chat.id, draft)
         await update.message.reply_text(
-            "6/6 — Send ONE product photo that you own/have permission to use, "
-            "or type SKIP for a neutral placeholder."
+            "6/6 — Send 1 to 5 product photos that you own or have permission to use. "
+            "At least 1 image is compulsory.\n\n"
+            "Send the images one by one. When finished, type DONE."
         )
         return
 
-    if state == "image":
-        if text.upper() == "SKIP":
-            await finish(update, draft, PLACEHOLDER)
+    if state == "images":
+        if text.upper() == "DONE":
+            if not draft.get("images"):
+                await update.message.reply_text(
+                    "❌ At least 1 product image is compulsory. Please send a photo first."
+                )
+                return
+            await finish(update, draft, draft["images"][0])
             return
+
         await update.message.reply_text(
-            "Please send the product photo as a Telegram image, or type SKIP."
+            f"📸 You have {len(draft.get('images', []))}/5 images. "
+            "Send a product photo, or type DONE when finished."
         )
 
 
@@ -385,19 +395,37 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not update.message or not update.message.photo:
         return
     draft = draft_for(update.effective_chat.id)
-    if not draft or draft.get("state") != "image":
+    if not draft or draft.get("state") != "images":
         await update.message.reply_text("Send an Amazon.in URL first.")
+        return
+
+    images = draft.setdefault("images", [])
+    if len(images) >= 5:
+        await update.message.reply_text(
+            "⚠️ Maximum 5 images reached. Type DONE to finish."
+        )
         return
 
     photo = update.message.photo[-1]
     telegram_file = await context.bot.get_file(photo.file_id)
 
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"{slugify(draft['name'])[:70]}-{draft['asin'].lower()}.jpg"
+    number = len(images) + 1
+    filename = f"{slugify(draft['name'])[:60]}-{draft['asin'].lower()}-{number}.jpg"
     target = IMAGE_DIR / filename
     await telegram_file.download_to_drive(custom_path=str(target))
 
-    await finish(update, draft, f"/products/{filename}")
+    images.append(f"/products/{filename}")
+    set_draft(update.effective_chat.id, draft)
+
+    if len(images) < 5:
+        await update.message.reply_text(
+            f"✅ Image {len(images)}/5 saved. Send another image or type DONE."
+        )
+    else:
+        await update.message.reply_text(
+            "✅ Image 5/5 saved. Maximum reached. Type DONE to publish the product."
+        )
 
 
 def main() -> None:

@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Home & Haven automation runtime data
 /automation/runtime/
+
+# Keep the documented automation template visible; real env files stay ignored.
+!automation/.env.example

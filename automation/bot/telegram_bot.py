@@ -1,9 +1,6 @@
-"""Home & Haven Telegram product intake and publishing bot.
+"""Home & Haven Telegram product manager.
 
-Flow:
-Amazon URL -> ASIN -> name -> category -> price -> affiliate URL ->
-optional features -> optional photo -> local products.ts update -> optional git push.
-
+ADD, UPDATE and DELETE products from Telegram.
 No Amazon scraping is performed.
 """
 
@@ -16,13 +13,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 from automation.product.asin import extract_asin
 from automation.product.asin_catalog import add_asin
@@ -30,63 +21,51 @@ from automation.product.catalog import product_exists_by_asin, slugify
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PRODUCTS_FILE = PROJECT_ROOT / "data" / "products.ts"
+CATALOG_FILE = PROJECT_ROOT / "data" / "automatedAsins.ts"
 STATE_FILE = PROJECT_ROOT / "automation" / "runtime" / "drafts.json"
 IMAGE_DIR = PROJECT_ROOT / "public" / "products"
-PLACEHOLDER = "/products/home-haven-placeholder.svg"
-
-AMAZON_URL_RE = re.compile(
-    r"https?://(?:www\.)?amazon\.in/[^\s]+",
-    re.IGNORECASE,
-)
-
-STATES = {
-    "name",
-    "category",
-    "price",
-    "affiliate",
-    "features",
-    "image",
-}
+AMAZON_URL_RE = re.compile(r"https?://(?:www\.)?amazon\.in/[^\s]+", re.I)
 
 
-def load_drafts() -> dict:
+def load_state() -> dict:
     if not STATE_FILE.exists():
         return {}
     try:
         return json.loads(STATE_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (OSError, json.JSONDecodeError):
         return {}
 
 
-def save_drafts(drafts: dict) -> None:
+def save_state(data: dict) -> None:
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(
-        json.dumps(drafts, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    STATE_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def draft_for(chat_id: int) -> dict | None:
-    return load_drafts().get(str(chat_id))
+def get_state(chat_id: int) -> dict | None:
+    return load_state().get(str(chat_id))
 
 
-def set_draft(chat_id: int, draft: dict) -> None:
-    drafts = load_drafts()
-    drafts[str(chat_id)] = draft
-    save_drafts(drafts)
+def set_state(chat_id: int, value: dict) -> None:
+    data = load_state()
+    data[str(chat_id)] = value
+    save_state(data)
 
 
-def clear_draft(chat_id: int) -> None:
-    drafts = load_drafts()
-    drafts.pop(str(chat_id), None)
-    save_drafts(drafts)
+def clear_state(chat_id: int) -> None:
+    data = load_state()
+    data.pop(str(chat_id), None)
+    save_state(data)
 
 
-def clean_text(value: str, limit: int = 240) -> str:
+def clean(value: str, limit: int = 500) -> str:
     return " ".join(value.strip().split())[:limit]
 
 
-def amazon_affiliate_url(value: str) -> bool:
+def ts(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def valid_affiliate_url(value: str) -> bool:
     try:
         host = urlparse(value).netloc.lower().split(":")[0]
     except ValueError:
@@ -94,357 +73,409 @@ def amazon_affiliate_url(value: str) -> bool:
     return host in {"amazon.in", "www.amazon.in", "amzn.in", "www.amzn.in", "link.amazon"}
 
 
-def choose_emoji(category: str) -> str:
+def emoji_for(category: str) -> str:
     c = category.lower()
-    if "kitchen" in c:
-        return "🍳"
-    if "lighting" in c or "lamp" in c:
-        return "💡"
-    if "bed" in c or "bedroom" in c:
-        return "🛏️"
-    if "bath" in c:
-        return "🛁"
-    if "storage" in c or "organization" in c:
-        return "📦"
-    if "decor" in c or "mirror" in c:
-        return "🏺"
+    if "kitchen" in c: return "🍳"
+    if "lamp" in c or "lighting" in c: return "💡"
+    if "bed" in c or "bedroom" in c: return "🛏️"
+    if "bath" in c: return "🛁"
+    if "storage" in c or "organization" in c: return "📦"
+    if "decor" in c or "mirror" in c: return "🏺"
     return "🏠"
 
 
-def make_description(name: str, category: str, features: str) -> str:
+def description(name: str, category: str, features: str) -> str:
     if features:
-        return (
-            f"{name} is a {category.replace('-', ' ')} find selected for "
-            f"practical everyday use and home styling. Key details: {features}."
-        )
-    return (
-        f"{name} is a {category.replace('-', ' ')} find selected for a "
-        "practical, comfortable, and well-organized home."
-    )
+        return f"{name} is a {category.replace('-', ' ')} find selected for practical everyday use and home styling. Key details: {features}."
+    return f"{name} is a {category.replace('-', ' ')} find selected for a practical, comfortable, and well-organized home."
 
 
-def make_tags(name: str, category: str, features: str) -> list[str]:
-    raw = f"{name} {category} {features}".lower()
-    words = re.findall(r"[a-zA-Z][a-zA-Z0-9-]{2,}", raw)
-    stop = {
-        "the", "and", "for", "with", "from", "this", "that", "home",
-        "into", "your", "use", "used", "item", "find", "selected",
-    }
-    tags: list[str] = []
+def tags(name: str, category: str, features: str) -> list[str]:
+    words = re.findall(r"[a-zA-Z][a-zA-Z0-9-]{2,}", f"{name} {category} {features}".lower())
+    stop = {"the", "and", "for", "with", "from", "this", "that", "home", "your", "use", "item", "find"}
+    out = []
     for word in words:
-        if word in stop or word in tags:
-            continue
-        tags.append(word.replace("-", " "))
-        if len(tags) == 8:
+        word = word.replace("-", " ")
+        if word not in stop and word not in out:
+            out.append(word)
+        if len(out) == 8:
             break
-    return tags
+    return out
 
 
-def ts_string(value: str) -> str:
-    return json.dumps(value, ensure_ascii=False)
-
-
-def render_product(draft: dict, image_path: str) -> str:
-    name = draft["name"]
-    category = slugify(draft["category"])
-    product_id = f"{slugify(name)[:70]}-{draft['asin'].lower()}"
-    description = make_description(name, draft["category"], draft.get("features", ""))
-    tags = make_tags(name, draft["category"], draft.get("features", ""))
-    emoji = choose_emoji(draft["category"])
-
-    tags_ts = ", ".join(ts_string(tag) for tag in tags)
-    image_values = draft.get("images") or [image_path]
-    images_ts = ", ".join(ts_string(value) for value in image_values)
+def product_block(d: dict) -> str:
+    pid = f"{slugify(d['name'])[:70]}-{d['asin'].lower()}"
+    image_values = d.get("images", [])
     return f'''  {{
-    id: {ts_string(product_id)},
-    name: {ts_string(name)},
-    category: {ts_string(category)},
-    price: {ts_string(draft["price"])},
-    description: {ts_string(description)},
-    emoji: {ts_string(emoji)},
-    images: [{images_ts}],
-    affiliateUrl: {ts_string(draft["affiliate"])},
+    id: {ts(pid)},
+    name: {ts(d["name"])},
+    category: {ts(slugify(d["category"]))},
+    price: {ts(d["price"])},
+    description: {ts(description(d["name"], d["category"], d.get("features", "")))},
+    emoji: {ts(emoji_for(d["category"]))},
+    images: [{", ".join(ts(x) for x in image_values)}],
+    affiliateUrl: {ts(d["affiliate"])},
     featured: false,
     retailer: "Amazon.in",
-    asin: {ts_string(draft["asin"])},
-    tags: [{tags_ts}],
+    asin: {ts(d["asin"])},
+    tags: [{", ".join(ts(x) for x in tags(d["name"], d["category"], d.get("features", "")))}],
   }},
 '''
 
 
-def append_product(draft: dict, image_path: str) -> None:
+def find_block(asin: str) -> tuple[int, int, str]:
     source = PRODUCTS_FILE.read_text(encoding="utf-8")
-    if product_exists_by_asin(source, draft["asin"]):
-        raise ValueError(f"ASIN {draft['asin']} is already in data/products.ts.")
+    pattern = re.compile(
+        r"\{(?:(?!\n\s*\},?\n).)*?\basin:\s*" + re.escape(asin) +
+        r"(?:(?!\n\s*\},?\n).)*?\n\s*\},?\n",
+        re.I | re.S,
+    )
+    m = pattern.search(source)
+    if not m:
+        raise ValueError(f"ASIN {asin} was not found in data/products.ts.")
+    return m.start(), m.end(), m.group()
 
-    marker = "];"
-    index = source.rfind(marker)
-    if index == -1:
-        raise ValueError("Could not find the end of products.ts.")
 
-    entry = render_product(draft, image_path)
-    updated = source[:index] + entry + source[index:]
-    PRODUCTS_FILE.write_text(updated, encoding="utf-8")
+def append_product(d: dict) -> None:
+    source = PRODUCTS_FILE.read_text(encoding="utf-8")
+    if product_exists_by_asin(source, d["asin"]):
+        raise ValueError(f"ASIN {d['asin']} already exists.")
+    idx = source.rfind("];")
+    if idx < 0:
+        raise ValueError("Could not find products array end.")
+    PRODUCTS_FILE.write_text(source[:idx] + product_block(d) + source[idx:], encoding="utf-8")
+    add_asin(d["asin"])
 
+
+def replace_field(block: str, field: str, value: str) -> str:
+    return re.sub(rf"(\b{re.escape(field)}:\s*)[^,\n]+,", rf"\g<1>{ts(value)},", block, count=1)
+
+
+def replace_images(block: str, images: list[str]) -> str:
+    return re.sub(r"(\bimages:\s*)\[[\s\S]*?\],", rf"\g<1>[{', '.join(ts(x) for x in images)}],", block, count=1)
+
+
+def update_product(asin: str, updates: dict) -> None:
+    source = PRODUCTS_FILE.read_text(encoding="utf-8")
+    start, end, block = find_block(asin)
+    for field, value in updates.items():
+        block = replace_images(block, value) if field == "images" else replace_field(block, field, value)
+    PRODUCTS_FILE.write_text(source[:start] + block + source[end:], encoding="utf-8")
+
+
+def delete_product(asin: str) -> list[str]:
+    source = PRODUCTS_FILE.read_text(encoding="utf-8")
+    start, end, block = find_block(asin)
+    images = re.findall(r'"(/products/[^"]+)"', block)
+    PRODUCTS_FILE.write_text(source[:start] + source[end:], encoding="utf-8")
+    if CATALOG_FILE.exists():
+        c = CATALOG_FILE.read_text(encoding="utf-8")
+        c = re.sub(rf'^\s*"{re.escape(asin.upper())}",\s*\n?', "", c, flags=re.M)
+        CATALOG_FILE.write_text(c, encoding="utf-8")
+    return images
+
+
+def publish(asin: str, action: str) -> str:
+    if os.getenv("AUTO_GIT_PUSH", "").lower() not in {"1", "true", "yes"}:
+        return "\n\n📌 Saved locally. Run git add/commit/push to publish."
+    try:
+        subprocess.run(["git", "add", "data/products.ts", "data/automatedAsins.ts", "public/products"], cwd=PROJECT_ROOT, check=True)
+        if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=PROJECT_ROOT).returncode == 0:
+            return "\n\nNo Git changes detected."
+        subprocess.run(["git", "commit", "-m", f"{action.capitalize()} affiliate product {asin}"], cwd=PROJECT_ROOT, check=True)
+        subprocess.run(["git", "push"], cwd=PROJECT_ROOT, check=True)
+        return "\n\n🚀 Published to GitHub. Cloudflare Pages can deploy the change."
+    except subprocess.CalledProcessError as exc:
+        return f"\n\n❌ Git publish failed: {exc}"
+
+
+def parse_asin(value: str) -> str:
+    value = value.strip()
+    if re.fullmatch(r"[A-Za-z0-9]{10}", value):
+        return value.upper()
+    return extract_asin(value)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
         await update.message.reply_text(
-            "🏠 Home & Haven Product Bot\n\n"
-            "Send an Amazon.in product URL to start.\n"
-            "I will ask only the product details needed to publish it.\n\n"
-            "Commands: /cancel, /status"
+            "🏠 HOME & HAVEN PRODUCT MANAGER\n\n"
+            "➕ ADD — add a new product\n"
+            "✏️ UPDATE — update an existing product\n"
+            "🗑️ DELETE — delete a product\n\n"
+            "Send ADD, UPDATE or DELETE."
         )
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
-        clear_draft(update.effective_chat.id)
-        await update.message.reply_text("Cancelled. Send another Amazon.in URL whenever you are ready.")
+        clear_state(update.effective_chat.id)
+        await update.message.reply_text("Cancelled. Send ADD, UPDATE or DELETE.")
 
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message:
         return
-    draft = draft_for(update.effective_chat.id)
-    if not draft:
-        await update.message.reply_text("No product is currently being prepared.")
-        return
+    d = get_state(update.effective_chat.id)
     await update.message.reply_text(
-        f"Preparing: {draft['name'] or '(name pending)'}\n"
-        f"ASIN: {draft['asin']}\n"
-        f"Next step: {draft['state']}"
+        f"Current operation: {d.get('action')}\nNext step: {d.get('state')}"
+        if d else "No operation in progress."
     )
 
 
-async def finish(update: Update, draft: dict, image_path: str) -> None:
-    chat_id = update.effective_chat.id
+async def finish_add(update: Update, d: dict) -> None:
     try:
-        append_product(draft, image_path)
-        add_asin(draft["asin"])
+        append_product(d)
+        clear_state(update.effective_chat.id)
+        await update.message.reply_text(
+            f"✅ PRODUCT ADDED\n\n{d['name']}\nASIN: {d['asin']}\n"
+            f"Images: {len(d['images'])}/5" + publish(d["asin"], "add")
+        )
     except Exception as exc:
-        await update.message.reply_text(f"❌ Could not save the product: {exc}")
+        await update.message.reply_text(f"❌ Could not add product: {exc}")
+
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message or not update.message.photo:
         return
-
-    clear_draft(chat_id)
-
-    publish_note = ""
-    if os.getenv("AUTO_GIT_PUSH", "").lower() in {"1", "true", "yes"}:
-        # Publish this product directly using the repository's existing git credentials.
-        ok, message = publish_product_git(draft["asin"])
-        publish_note = f"\n\n🚀 {message}"
-    else:
-        publish_note = (
-            "\n\n📌 Saved locally. To publish it now, run:\n"
-            "git add data/products.ts data/automatedAsins.ts public/products\n"
-            f'git commit -m "Add affiliate product {draft["asin"]}"\n'
-            "git push"
-        )
-
+    d = get_state(update.effective_chat.id)
+    if not d or d.get("state") not in {"add_images", "update_images"}:
+        await update.message.reply_text("Start ADD or UPDATE first.")
+        return
+    images = d.setdefault("images", [])
+    if len(images) >= 5:
+        await update.message.reply_text("Maximum 5 images reached. Type DONE.")
+        return
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    number = len(images) + 1
+    filename = f"{slugify(d['name'])[:60]}-{d['asin'].lower()}-{number}.jpg"
+    await file.download_to_drive(custom_path=str(IMAGE_DIR / filename))
+    images.append(f"/products/{filename}")
+    set_state(update.effective_chat.id, d)
     await update.message.reply_text(
-        "✅ Product created successfully!\n\n"
-        f"Name: {draft['name']}\n"
-        f"ASIN: {draft['asin']}\n"
-        f"Category: {draft['category']}\n"
-        f"Price entered: {draft['price']}"
-        f"{publish_note}"
-    )
-
-
-def publish_product_git(asin: str) -> tuple[bool, str]:
-    try:
-        subprocess.run(
-            ["git", "add", "data/products.ts", "data/automatedAsins.ts", "public/products"],
-            cwd=PROJECT_ROOT,
-            check=True,
-        )
-        diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=PROJECT_ROOT)
-        if diff.returncode == 0:
-            return True, "No new Git changes were detected."
-
-        subprocess.run(
-            ["git", "commit", "-m", f"Add affiliate product {asin}"],
-            cwd=PROJECT_ROOT,
-            check=True,
-        )
-        subprocess.run(["git", "push"], cwd=PROJECT_ROOT, check=True)
-        return True, "Published to GitHub. Cloudflare Pages can deploy from the push."
-    except subprocess.CalledProcessError as exc:
-        return False, f"Git push failed (check your local GitHub login): {exc}"
-
-
-async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str) -> None:
-    try:
-        asin = extract_asin(url)
-    except ValueError as exc:
-        await update.message.reply_text(f"❌ {exc}")
-        return
-
-    source = PRODUCTS_FILE.read_text(encoding="utf-8")
-    if product_exists_by_asin(source, asin):
-        await update.message.reply_text(f"⚠️ ASIN {asin} is already in your product catalog.")
-        return
-
-    set_draft(
-        update.effective_chat.id,
-        {
-            "asin": asin,
-            "source_url": url,
-            "name": "",
-            "category": "",
-            "price": "",
-            "affiliate": "",
-            "features": "",
-            "images": [],
-            "state": "name",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        },
-    )
-    await update.message.reply_text(
-        f"✅ ASIN detected: {asin}\n\n"
-        "1/6 — What product name should appear on Home & Haven?"
+        f"✅ Image {len(images)}/5 saved. Send another image or type DONE."
     )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message:
         return
-
     text = (update.message.text or "").strip()
-    draft = draft_for(update.effective_chat.id)
+    cid = update.effective_chat.id
+    d = get_state(cid)
 
-    if not draft:
-        match = AMAZON_URL_RE.search(text)
-        if not match:
-            await update.message.reply_text("Send an Amazon.in product URL to start.")
+    if not d:
+        choice = text.upper()
+        if choice in {"ADD", "➕ ADD"}:
+            set_state(cid, {"action": "add", "state": "add_url"})
+            await update.message.reply_text("➕ ADD PRODUCT\n\nSend the Amazon.in URL or ASIN.")
+        elif choice in {"UPDATE", "✏️ UPDATE"}:
+            set_state(cid, {"action": "update", "state": "update_url"})
+            await update.message.reply_text("✏️ UPDATE PRODUCT\n\nSend the Amazon.in URL or ASIN.")
+        elif choice in {"DELETE", "🗑️ DELETE"}:
+            set_state(cid, {"action": "delete", "state": "delete_url"})
+            await update.message.reply_text("🗑️ DELETE PRODUCT\n\nSend the Amazon.in URL or ASIN.")
+        else:
+            await update.message.reply_text("Choose ADD, UPDATE, or DELETE.")
+        return
+
+    state = d["state"]
+
+    if state in {"add_url", "update_url", "delete_url"}:
+        try:
+            asin = parse_asin(text)
+        except ValueError as exc:
+            await update.message.reply_text(f"❌ {exc}")
             return
-        await handle_url(update, context, match.group(0))
-        return
+        exists = product_exists_by_asin(PRODUCTS_FILE.read_text(encoding="utf-8"), asin)
 
-    state = draft["state"]
-
-    if state == "name":
-        if len(text) < 2:
-            await update.message.reply_text("Please enter a product name.")
+        if state == "add_url":
+            if exists:
+                clear_state(cid)
+                await update.message.reply_text(f"⚠️ {asin} already exists. Use UPDATE.")
+                return
+            d.update({"asin": asin, "name": "", "category": "", "price": "", "affiliate": "", "features": "", "images": [], "state": "add_name"})
+            set_state(cid, d)
+            await update.message.reply_text("1/6 — Product name?")
             return
-        draft["name"] = clean_text(text, 160)
-        draft["state"] = "category"
-        set_draft(update.effective_chat.id, draft)
-        await update.message.reply_text("2/6 — Category? Example: home-decor, lighting, kitchen, bedroom")
-        return
 
-    if state == "category":
-        draft["category"] = clean_text(text, 80)
-        draft["state"] = "price"
-        set_draft(update.effective_chat.id, draft)
-        await update.message.reply_text("3/6 — What price should be shown? Example: ₹799")
-        return
-
-    if state == "price":
-        draft["price"] = clean_text(text, 40)
-        draft["state"] = "affiliate"
-        set_draft(update.effective_chat.id, draft)
-        await update.message.reply_text(
-            "4/6 — Send your Amazon affiliate link (SiteStripe link is fine)."
-        )
-        return
-
-    if state == "affiliate":
-        if not amazon_affiliate_url(text):
+        if state == "update_url":
+            if not exists:
+                clear_state(cid)
+                await update.message.reply_text(f"❌ {asin} is not in your catalog.")
+                return
+            d.update({"asin": asin, "state": "update_choice"})
+            set_state(cid, d)
             await update.message.reply_text(
-                "Please send an Amazon.in/amzn.in/link.amazon affiliate URL."
+                f"✏️ Found {asin}. What do you want to update?\n\n"
+                "NAME\nDETAILS\nLINK\nIMAGES\nALL"
             )
             return
-        draft["affiliate"] = text
-        draft["state"] = "features"
-        set_draft(update.effective_chat.id, draft)
-        await update.message.reply_text(
-            "5/6 — Optional: send a short list of real product features. "
-            "Or type SKIP."
-        )
-        return
 
-    if state == "features":
-        draft["features"] = "" if text.upper() == "SKIP" else clean_text(text, 500)
-        draft["state"] = "images"
-        draft["images"] = []
-        set_draft(update.effective_chat.id, draft)
-        await update.message.reply_text(
-            "6/6 — Send 1 to 5 product photos that you own or have permission to use. "
-            "At least 1 image is compulsory.\n\n"
-            "Send the images one by one. When finished, type DONE."
-        )
-        return
-
-    if state == "images":
-        if text.upper() == "DONE":
-            if not draft.get("images"):
-                await update.message.reply_text(
-                    "❌ At least 1 product image is compulsory. Please send a photo first."
-                )
-                return
-            await finish(update, draft, draft["images"][0])
+        if not exists:
+            clear_state(cid)
+            await update.message.reply_text(f"❌ {asin} is not in your catalog.")
             return
-
+        d.update({"asin": asin, "state": "delete_confirm"})
+        set_state(cid, d)
         await update.message.reply_text(
-            f"📸 You have {len(draft.get('images', []))}/5 images. "
-            "Send a product photo, or type DONE when finished."
-        )
-
-
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.message or not update.message.photo:
-        return
-    draft = draft_for(update.effective_chat.id)
-    if not draft or draft.get("state") != "images":
-        await update.message.reply_text("Send an Amazon.in URL first.")
-        return
-
-    images = draft.setdefault("images", [])
-    if len(images) >= 5:
-        await update.message.reply_text(
-            "⚠️ Maximum 5 images reached. Type DONE to finish."
+            f"⚠️ Delete product {asin}? This also removes its local product images.\n"
+            "Type DELETE to confirm or CANCEL."
         )
         return
 
-    photo = update.message.photo[-1]
-    telegram_file = await context.bot.get_file(photo.file_id)
+    # ADD
+    if state == "add_name":
+        d["name"] = clean(text, 160); d["state"] = "add_category"
+        set_state(cid, d); await update.message.reply_text("2/6 — Category?"); return
+    if state == "add_category":
+        d["category"] = clean(text, 80); d["state"] = "add_price"
+        set_state(cid, d); await update.message.reply_text("3/6 — Price to display? Example: ₹799"); return
+    if state == "add_price":
+        d["price"] = clean(text, 40); d["state"] = "add_link"
+        set_state(cid, d); await update.message.reply_text("4/6 — Amazon affiliate link?"); return
+    if state == "add_link":
+        if not valid_affiliate_url(text):
+            await update.message.reply_text("Send a valid Amazon affiliate URL.")
+            return
+        d["affiliate"] = text; d["state"] = "add_features"
+        set_state(cid, d); await update.message.reply_text("5/6 — Features/description, or SKIP?"); return
+    if state == "add_features":
+        d["features"] = "" if text.upper() == "SKIP" else clean(text)
+        d["state"] = "add_images"; d["images"] = []
+        set_state(cid, d)
+        await update.message.reply_text("6/6 — Send 1–5 images. At least 1 is compulsory. Type DONE after images.")
+        return
+    if state == "add_images":
+        if text.upper() != "DONE":
+            await update.message.reply_text(f"Send an image. You have {len(d['images'])}/5 saved.")
+            return
+        if not d["images"]:
+            await update.message.reply_text("❌ At least 1 image is compulsory.")
+            return
+        await finish_add(update, d)
+        return
 
-    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-    number = len(images) + 1
-    filename = f"{slugify(draft['name'])[:60]}-{draft['asin'].lower()}-{number}.jpg"
-    target = IMAGE_DIR / filename
-    await telegram_file.download_to_drive(custom_path=str(target))
+    # UPDATE
+    if state == "update_choice":
+        choice = text.upper()
+        if choice not in {"NAME", "DETAILS", "LINK", "IMAGES", "ALL"}:
+            await update.message.reply_text("Choose NAME, DETAILS, LINK, IMAGES or ALL.")
+            return
+        d["update_type"] = choice
+        if choice == "NAME":
+            d["state"] = "update_name"
+            await update.message.reply_text("New product name?")
+        elif choice == "DETAILS":
+            d["state"] = "update_details"
+            await update.message.reply_text("Send: category | price | features/description")
+        elif choice == "LINK":
+            d["state"] = "update_link"
+            await update.message.reply_text("New Amazon affiliate link?")
+        elif choice == "IMAGES":
+            d["state"] = "update_images"; d["images"] = []
+            await update.message.reply_text("Send 1–5 replacement images. At least 1 is required. Type DONE.")
+        else:
+            d["state"] = "update_all_name"
+            await update.message.reply_text("New product name?")
+        set_state(cid, d); return
 
-    images.append(f"/products/{filename}")
-    set_draft(update.effective_chat.id, draft)
+    if state == "update_name":
+        d["new_name"] = clean(text, 160); d["state"] = "update_name_confirm"
+        set_state(cid, d); await update.message.reply_text("Type YES to save or NO to cancel."); return
+    if state == "update_name_confirm":
+        if text.upper() != "YES":
+            clear_state(cid); await update.message.reply_text("Update cancelled."); return
+        update_product(d["asin"], {"name": d["new_name"]})
+        clear_state(cid); await update.message.reply_text("✅ Name updated." + publish(d["asin"], "update")); return
 
-    if len(images) < 5:
-        await update.message.reply_text(
-            f"✅ Image {len(images)}/5 saved. Send another image or type DONE."
-        )
-    else:
-        await update.message.reply_text(
-            "✅ Image 5/5 saved. Maximum reached. Type DONE to publish the product."
-        )
+    if state == "update_details":
+        parts = [x.strip() for x in text.split("|", 2)]
+        if len(parts) != 3:
+            await update.message.reply_text("Use: category | price | features/description")
+            return
+        update_product(d["asin"], {"category": slugify(parts[0]), "price": parts[1], "description": parts[2]})
+        clear_state(cid); await update.message.reply_text("✅ Details updated." + publish(d["asin"], "update")); return
+
+    if state == "update_link":
+        if not valid_affiliate_url(text):
+            await update.message.reply_text("Send a valid Amazon affiliate URL.")
+            return
+        update_product(d["asin"], {"affiliateUrl": text})
+        clear_state(cid); await update.message.reply_text("✅ Affiliate link updated." + publish(d["asin"], "update")); return
+
+    if state == "update_images":
+        if text.upper() != "DONE":
+            await update.message.reply_text(f"Send an image. You have {len(d['images'])}/5 saved.")
+            return
+        if not d["images"]:
+            await update.message.reply_text("❌ At least 1 image is required.")
+            return
+        update_product(d["asin"], {"images": d["images"]})
+        clear_state(cid); await update.message.reply_text("✅ Images updated." + publish(d["asin"], "update")); return
+
+    if state == "update_all_name":
+        d["new_name"] = clean(text, 160); d["state"] = "update_all_category"
+        set_state(cid, d); await update.message.reply_text("New category?"); return
+    if state == "update_all_category":
+        d["new_category"] = clean(text, 80); d["state"] = "update_all_price"
+        set_state(cid, d); await update.message.reply_text("New price?"); return
+    if state == "update_all_price":
+        d["new_price"] = clean(text, 40); d["state"] = "update_all_link"
+        set_state(cid, d); await update.message.reply_text("New Amazon affiliate link?"); return
+    if state == "update_all_link":
+        if not valid_affiliate_url(text):
+            await update.message.reply_text("Send a valid Amazon affiliate URL."); return
+        d["new_link"] = text; d["state"] = "update_all_features"
+        set_state(cid, d); await update.message.reply_text("New features/description, or SKIP?"); return
+    if state == "update_all_features":
+        d["new_features"] = "" if text.upper() == "SKIP" else clean(text)
+        d["state"] = "update_all_images"; d["images"] = []
+        set_state(cid, d); await update.message.reply_text("Send 1–5 replacement images. At least 1 required. Type DONE."); return
+    if state == "update_all_images":
+        if text.upper() != "DONE":
+            await update.message.reply_text(f"Send an image. You have {len(d['images'])}/5 saved."); return
+        if not d["images"]:
+            await update.message.reply_text("❌ At least 1 image is required."); return
+        updates = {
+            "name": d["new_name"],
+            "category": slugify(d["new_category"]),
+            "price": d["new_price"],
+            "affiliateUrl": d["new_link"],
+            "description": description(d["new_name"], d["new_category"], d["new_features"]),
+            "images": d["images"],
+        }
+        update_product(d["asin"], updates)
+        clear_state(cid)
+        await update.message.reply_text("✅ Product completely updated." + publish(d["asin"], "update")); return
+
+    # DELETE
+    if state == "delete_confirm":
+        if text.upper() != "DELETE":
+            clear_state(cid); await update.message.reply_text("Delete cancelled."); return
+        asin = d["asin"]
+        images = delete_product(asin)
+        for path in images:
+            target = PROJECT_ROOT / path.lstrip("/")
+            if target.exists():
+                target.unlink()
+        clear_state(cid)
+        await update.message.reply_text("🗑️ Product deleted." + publish(asin, "delete")); return
 
 
 def main() -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
-        raise SystemExit(
-            "TELEGRAM_BOT_TOKEN is not set. Set it as an environment variable before starting the bot."
-        )
-
+        raise SystemExit("TELEGRAM_BOT_TOKEN is not set.")
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    print("Home & Haven Telegram product bot is running...")
+    print("Home & Haven Telegram product manager is running...")
     app.run_polling()
 
 

@@ -299,7 +299,7 @@ def pinterest_product_data(asin: str) -> dict:
     return {"asin": asin, "name": name, "images": images, "category": "", "features": ""}
 
 
-def pinterest_upload(d: dict) -> tuple[int, list[str]]:
+def pinterest_upload(d: dict, board_id: str | None = None) -> tuple[int, list[str]]:
     if not pinterest_configured():
         raise PinterestError(
             "Pinterest is not configured. Run python -m automation.pinterest.oauth "
@@ -316,7 +316,7 @@ def pinterest_upload(d: dict) -> tuple[int, list[str]]:
 
     link = f"{base}/products/{product_public_id(d)}"
     pin_ids: list[str] = []
-    board_id = os.environ["PINTEREST_BOARD_ID"]
+    board_id = board_id or os.environ["PINTEREST_BOARD_ID"]
 
     for image_url in image_urls:
         pin_id = create_image_pin(
@@ -331,10 +331,10 @@ def pinterest_upload(d: dict) -> tuple[int, list[str]]:
     return len(pin_ids), pin_ids
 
 
-def pinterest_replace_upload(d: dict) -> tuple[int, list[str], int]:
+def pinterest_replace_upload(d: dict, board_id: str) -> tuple[int, list[str], int]:
     """Create replacement Pins first, then remove old Pins."""
     old_pin_ids = get_pinterest_pins(d["asin"])
-    count, new_pin_ids = pinterest_upload(d)
+    count, new_pin_ids = pinterest_upload(d, board_id)
 
     deleted = 0
     failures: list[str] = []
@@ -352,6 +352,52 @@ def pinterest_replace_upload(d: dict) -> tuple[int, list[str], int]:
             f"New Pins are recorded. Details: {'; '.join(failures)[:600]}"
         )
     return count, new_pin_ids, deleted
+
+
+async def ask_pinterest_board(update: Update, d: dict, mode: str) -> None:
+    """Show available Pinterest boards and wait for a Telegram selection."""
+    try:
+        boards = list_boards()
+    except PinterestError as exc:
+        await update.message.reply_text(f"❌ Could not read Pinterest boards: {exc}")
+        clear_state(update.effective_chat.id)
+        return
+
+    if not boards:
+        await update.message.reply_text(
+            "❌ No Pinterest boards were returned. Create at least one board in Pinterest and try again."
+        )
+        clear_state(update.effective_chat.id)
+        return
+
+    d["pinterest_boards"] = [
+        {"id": str(board.get("id", "")), "name": str(board.get("name", "(unnamed)"))}
+        for board in boards
+        if board.get("id")
+    ]
+    d["pinterest_mode"] = mode
+    d["state"] = "pinterest_board_select"
+    set_state(update.effective_chat.id, d)
+
+    lines = ["📌 Which Pinterest board should I use?\n"]
+    for index, board in enumerate(d["pinterest_boards"], start=1):
+        lines.append(f"{index}. {board['name']}")
+    lines.append("\nReply with the board NUMBER.")
+    await update.message.reply_text("\n".join(lines)[:3900])
+
+
+def selected_pinterest_board(d: dict, text: str) -> dict | None:
+    boards = d.get("pinterest_boards", [])
+    value = text.strip()
+    if value.isdigit():
+        index = int(value) - 1
+        if 0 <= index < len(boards):
+            return boards[index]
+    lowered = value.casefold()
+    for board in boards:
+        if board["name"].casefold() == lowered:
+            return board
+    return None
 
 
 async def finish_add(update: Update, d: dict) -> None:
@@ -519,26 +565,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             clear_state(cid)
             return
 
-        await update.message.reply_text(
-            f"📌 Uploading {len(d['images'])} images to Pinterest...\n"
-            "I will create exactly one Pin per website image."
-        )
-        try:
-            count, pin_ids = pinterest_upload(d)
-            set_pinterest_pins(d["asin"], pin_ids)
-            clear_state(cid)
-            await update.message.reply_text(
-                f"🎉 Pinterest upload complete!\n\n"
-                f"Product: {d['name']}\n"
-                f"Pins created: {count}\n"
-                f"Images on website: {len(d['images'])}"
-            )
-        except PinterestError as exc:
-            await update.message.reply_text(
-                f"❌ Pinterest upload did not complete.\n\n{exc}\n\n"
-                "The product and website images are already saved.\n"
-                "Reply RETRY to try again or NO to finish."
-            )
+        await ask_pinterest_board(update, d, "add")
         return
 
     if state == "pinterest_update_confirm":
@@ -558,24 +585,65 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             clear_state(cid)
             return
 
+        await ask_pinterest_board(update, d, "update")
+        return
+
+    if state == "pinterest_board_select":
+        board = selected_pinterest_board(d, text)
+        if not board:
+            await update.message.reply_text(
+                "❌ Invalid board selection. Reply with the NUMBER shown above."
+            )
+            return
+
+        d["selected_board_id"] = board["id"]
+        d["selected_board_name"] = board["name"]
+        mode = d.get("pinterest_mode", "add")
+
+        if mode == "add":
+            await update.message.reply_text(
+                f"📌 Board selected: {board['name']}\n\n"
+                f"Uploading {len(d['images'])} image(s)...\n"
+                "I will create exactly one Pin per website image."
+            )
+            try:
+                count, pin_ids = pinterest_upload(d, board["id"])
+                set_pinterest_pins(d["asin"], pin_ids)
+                clear_state(cid)
+                await update.message.reply_text(
+                    f"🎉 Pinterest upload complete!\n\n"
+                    f"Board: {board['name']}\n"
+                    f"Product: {d['name']}\n"
+                    f"Pins created: {count}\n"
+                    f"Website images: {len(d['images'])}"
+                )
+            except PinterestError as exc:
+                await update.message.reply_text(
+                    f"❌ Pinterest upload did not complete.\n\n{exc}\n\n"
+                    "Reply with the board NUMBER to retry, or CANCEL."
+                )
+            return
+
         await update.message.reply_text(
-            f"📌 Refreshing Pinterest for {d['name']}...\n"
+            f"📌 Board selected: {board['name']}\n\n"
+            f"Refreshing Pinterest for {d['name']}...\n"
             f"Target: exactly {len(d['images'])} Pin(s), one per website image."
         )
         try:
             pinterest_data = pinterest_product_data(d["asin"])
-            count, _, deleted = pinterest_replace_upload(pinterest_data)
+            count, _, deleted = pinterest_replace_upload(pinterest_data, board["id"])
             clear_state(cid)
             await update.message.reply_text(
                 f"🎉 Pinterest refresh complete!\n\n"
+                f"Board: {board['name']}\n"
                 f"New Pins: {count}\n"
                 f"Old Pins removed: {deleted}\n"
                 f"Website images: {len(d['images'])}"
             )
         except PinterestError as exc:
             await update.message.reply_text(
-                f"❌ Pinterest refresh was incomplete.\n\n{exc}\n"
-                "Reply RETRY to try again or NO to finish."
+                f"❌ Pinterest refresh was incomplete.\n\n{exc}\n\n"
+                "Reply with the board NUMBER to retry, or CANCEL."
             )
         return
 

@@ -94,3 +94,69 @@ The site continues to include the Amazon Associate disclosure. Prices and availa
 ## Pinterest
 
 Pinterest automation is kept separate. Use original/licensed creative assets rather than automatically reposting Amazon-provided product images/content. A Pinterest developer app and appropriate API access can be added later.
+
+
+## Pinterest automation
+
+After an ADD operation, the Telegram bot asks:
+
+```
+Should I upload these images to Pinterest?
+YES / NO
+```
+
+If YES, it creates **exactly one Pinterest Pin per product image**. The same image that was added to `public/products/` is used as the Pin image URL, and the Pin links to the Home & Haven product page.
+
+Required environment variables:
+
+- `AUTO_GIT_PUSH=1`
+- `SITE_BASE_URL=https://home-and-haven.pages.dev`
+- `PINTEREST_ACCESS_TOKEN`
+- `PINTEREST_BOARD_ID`
+
+Pinterest API access must be approved and the token must include `boards:read`, `boards:write`, `pins:read`, and `pins:write`. Pinterest's current documentation requires these scopes for creating and managing boards/Pins. The bot uses the image URL form of Create Pin.
+
+To find boards after configuring the token:
+
+```text
+/pinterest_boards
+```
+
+The bot will list board names and IDs so you can put the desired ID in `PINTEREST_BOARD_ID`.
+
+### Complete intended flow
+
+```
+Telegram
+  ↓
+ADD
+  ↓
+Amazon URL / ASIN
+  ↓
+Name + category + price + affiliate link + features
+  ↓
+1–5 user-provided images
+  ↓
+DONE
+  ↓
+products.ts + images
+  ↓
+Git commit + push
+  ↓
+Cloudflare Pages deploy
+  ↓
+Bot asks: Upload to Pinterest?
+  ↓
+YES
+  ↓
+Wait for public image URLs
+  ↓
+1 image = 1 Pin
+2 images = 2 Pins
+...
+5 images = 5 Pins
+  ↓
+Each Pin links to the Home & Haven product page
+```
+
+Only use images you own or have permission to publish. Pinterest's API accepts a public third-party image URL for an image Pin.

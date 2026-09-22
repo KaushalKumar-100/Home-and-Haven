@@ -11,6 +11,7 @@ export type Product = {
   badge?: string;
 
   // Affiliate/product information
+  asin?: string;
   retailer?: string;
   originalPrice?: string;
   rating?: number;

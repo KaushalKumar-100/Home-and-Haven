@@ -178,15 +178,36 @@ def delete_product(asin: str) -> list[str]:
 def publish(asin: str, action: str) -> str:
     if os.getenv("AUTO_GIT_PUSH", "").lower() not in {"1", "true", "yes"}:
         return "\n\n📌 Saved locally. Run git add/commit/push to publish."
+
+    env = os.environ.copy()
+    # Never allow git to wait for an interactive username/password prompt.
+    env["GIT_TERMINAL_PROMPT"] = "0"
+
     try:
-        subprocess.run(["git", "add", "data/products.ts", "data/automatedAsins.ts", "public/products"], cwd=PROJECT_ROOT, check=True)
-        if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=PROJECT_ROOT).returncode == 0:
+        subprocess.run(
+            ["git", "add", "data/products.ts", "data/automatedAsins.ts", "public/products"],
+            cwd=PROJECT_ROOT, check=True, timeout=10, env=env,
+        )
+        if subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=PROJECT_ROOT, timeout=10, env=env,
+        ).returncode == 0:
             return "\n\nNo Git changes detected."
-        subprocess.run(["git", "commit", "-m", f"{action.capitalize()} affiliate product {asin}"], cwd=PROJECT_ROOT, check=True)
-        subprocess.run(["git", "push"], cwd=PROJECT_ROOT, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"{action.capitalize()} affiliate product {asin}"],
+            cwd=PROJECT_ROOT, check=True, timeout=20, env=env,
+        )
+        subprocess.run(
+            ["git", "push"],
+            cwd=PROJECT_ROOT, check=True, timeout=20, env=env,
+            capture_output=True, text=True,
+        )
         return "\n\n🚀 Published to GitHub. Cloudflare Pages can deploy the change."
+    except subprocess.TimeoutExpired:
+        return "\n\n⚠️ Git operation timed out. The product change was saved locally, but GitHub was not confirmed."
     except subprocess.CalledProcessError as exc:
-        return f"\n\n❌ Git publish failed: {exc}"
+        detail = (exc.stderr or exc.stdout or str(exc)).strip()
+        return f"\n\n❌ Git publish failed: {detail[-500:]}"
 
 
 def parse_asin(value: str) -> str:
@@ -457,13 +478,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if text.upper() != "DELETE":
             clear_state(cid); await update.message.reply_text("Delete cancelled."); return
         asin = d["asin"]
-        images = delete_product(asin)
-        for path in images:
-            target = PROJECT_ROOT / path.lstrip("/")
-            if target.exists():
-                target.unlink()
+        try:
+            images = delete_product(asin)
+            for path in images:
+                target = PROJECT_ROOT / path.lstrip("/")
+                if target.exists():
+                    target.unlink()
+        except Exception as exc:
+            await update.message.reply_text(f"❌ Delete failed: {exc}")
+            return
+
         clear_state(cid)
-        await update.message.reply_text("🗑️ Product deleted." + publish(asin, "delete")); return
+        # Tell Telegram immediately that the local deletion succeeded.
+        await update.message.reply_text(
+            f"🗑️ Product {asin} deleted locally.\n"
+            "The product entry and its local images were removed."
+        )
+        result = publish(asin, "delete")
+        if result.strip():
+            await update.message.reply_text(result.strip())
 
 
 def main() -> None:

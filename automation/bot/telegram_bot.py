@@ -22,9 +22,11 @@ from automation.pinterest.client import (
     PinterestError,
     configured as pinterest_configured,
     create_image_pin,
+    delete_pin,
     wait_until_public,
     list_boards,
 )
+from automation.pinterest.registry import get as get_pinterest_pins, remove as remove_pinterest_pins, set_pins as set_pinterest_pins
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PRODUCTS_FILE = PROJECT_ROOT / "data" / "products.ts"
@@ -284,22 +286,23 @@ def pinterest_description(d: dict) -> str:
 def pinterest_upload(d: dict) -> tuple[int, list[str]]:
     if not pinterest_configured():
         raise PinterestError(
-            "Pinterest is not configured. Set PINTEREST_ACCESS_TOKEN and PINTEREST_BOARD_ID."
+            "Pinterest is not configured. Run python -m automation.pinterest.oauth "
+            "and set PINTEREST_BOARD_ID."
         )
 
     base = site_base_url()
     image_urls = [f"{base}{path}" for path in d["images"]]
-    if not wait_until_public(image_urls, timeout_seconds=180):
+    if not wait_until_public(image_urls, timeout_seconds=300):
         raise PinterestError(
             "The website images are not publicly reachable yet. "
-            "Cloudflare may still be deploying."
+            "Cloudflare may still be deploying. Try again in a few minutes."
         )
 
     link = f"{base}/products/{product_public_id(d)}"
     pin_ids: list[str] = []
     board_id = os.environ["PINTEREST_BOARD_ID"]
 
-    for index, image_url in enumerate(image_urls, start=1):
+    for image_url in image_urls:
         pin_id = create_image_pin(
             board_id=board_id,
             image_url=image_url,
@@ -310,6 +313,29 @@ def pinterest_upload(d: dict) -> tuple[int, list[str]]:
         pin_ids.append(pin_id)
 
     return len(pin_ids), pin_ids
+
+
+def pinterest_replace_upload(d: dict) -> tuple[int, list[str], int]:
+    """Create replacement Pins first, then remove old Pins."""
+    old_pin_ids = get_pinterest_pins(d["asin"])
+    count, new_pin_ids = pinterest_upload(d)
+
+    deleted = 0
+    failures: list[str] = []
+    for pin_id in old_pin_ids:
+        try:
+            delete_pin(pin_id)
+            deleted += 1
+        except PinterestError as exc:
+            failures.append(f"{pin_id}: {exc}")
+
+    set_pinterest_pins(d["asin"], new_pin_ids)
+    if failures:
+        raise PinterestError(
+            f"Created {count} new Pins, but could not delete {len(failures)} old Pin(s). "
+            f"New Pins are recorded. Details: {'; '.join(failures)[:600]}"
+        )
+    return count, new_pin_ids, deleted
 
 
 async def finish_add(update: Update, d: dict) -> None:
@@ -464,15 +490,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             clear_state(cid)
             await update.message.reply_text("✅ Product is live on the website. Pinterest upload skipped.")
             return
-        if choice not in {"YES", "Y"}:
-            await update.message.reply_text("Reply YES to upload all product images to Pinterest, or NO to skip.")
+        if choice not in {"YES", "Y", "RETRY"}:
+            await update.message.reply_text("Reply YES to upload, RETRY to retry, or NO to skip.")
             return
 
         if not pinterest_configured():
             await update.message.reply_text(
                 "⚠️ Pinterest is not configured yet.\n\n"
-                "I need PINTEREST_ACCESS_TOKEN and PINTEREST_BOARD_ID. "
-                "After you configure them, add the product again or use the Pinterest upload command."
+                "Run: python -m automation.pinterest.oauth\n"
+                "Then set PINTEREST_BOARD_ID and restart the bot."
             )
             clear_state(cid)
             return
@@ -483,6 +509,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         try:
             count, pin_ids = pinterest_upload(d)
+            set_pinterest_pins(d["asin"], pin_ids)
             clear_state(cid)
             await update.message.reply_text(
                 f"🎉 Pinterest upload complete!\n\n"
@@ -493,9 +520,46 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         except PinterestError as exc:
             await update.message.reply_text(
                 f"❌ Pinterest upload did not complete.\n\n{exc}\n\n"
-                "The product and website images are already saved."
+                "The product and website images are already saved.\n"
+                "Reply RETRY to try again or NO to finish."
+            )
+        return
+
+    if state == "pinterest_update_confirm":
+        choice = text.upper()
+        if choice in {"NO", "N", "CANCEL"}:
+            clear_state(cid)
+            await update.message.reply_text("✅ Website update is live. Pinterest was left unchanged.")
+            return
+        if choice not in {"YES", "Y", "RETRY"}:
+            await update.message.reply_text("Reply YES to refresh Pinterest, RETRY to retry, or NO to skip.")
+            return
+
+        if not pinterest_configured():
+            await update.message.reply_text(
+                "⚠️ Pinterest is not configured. Website update is live, but Pinterest was not changed."
             )
             clear_state(cid)
+            return
+
+        await update.message.reply_text(
+            f"📌 Refreshing Pinterest for {d['name']}...\n"
+            f"Target: exactly {len(d['images'])} Pin(s), one per website image."
+        )
+        try:
+            count, _, deleted = pinterest_replace_upload(d)
+            clear_state(cid)
+            await update.message.reply_text(
+                f"🎉 Pinterest refresh complete!\n\n"
+                f"New Pins: {count}\n"
+                f"Old Pins removed: {deleted}\n"
+                f"Website images: {len(d['images'])}"
+            )
+        except PinterestError as exc:
+            await update.message.reply_text(
+                f"❌ Pinterest refresh was incomplete.\n\n{exc}\n"
+                "Reply RETRY to try again or NO to finish."
+            )
         return
 
     # UPDATE
@@ -530,7 +594,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             clear_state(cid); await update.message.reply_text("Update cancelled."); return
         new_id = f"{slugify(d['new_name'])[:70]}-{d['asin'].lower()}"
         update_product(d["asin"], {"name": d["new_name"], "id": new_id})
-        clear_state(cid); await update.message.reply_text("✅ Name and product ID updated." + publish(d["asin"], "update")); return
+        publish_result = publish(d["asin"], "update")
+        d["state"] = "pinterest_update_confirm"
+        set_state(cid, d)
+        await update.message.reply_text(
+            "✅ Name and product ID updated." + publish_result + "\n\n"
+            "📌 Refresh Pinterest Pins too? Reply YES or NO."
+        )
+        return
 
     if state == "update_details":
         parts = [x.strip() for x in text.split("|", 2)]
@@ -538,14 +609,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text("Use: category | price | features/description")
             return
         update_product(d["asin"], {"category": slugify(parts[0]), "price": parts[1], "description": parts[2]})
-        clear_state(cid); await update.message.reply_text("✅ Details updated." + publish(d["asin"], "update")); return
+        publish_result = publish(d["asin"], "update")
+        d["state"] = "pinterest_update_confirm"
+        set_state(cid, d)
+        await update.message.reply_text(
+            "✅ Details updated." + publish_result + "\n\n"
+            "📌 Refresh Pinterest Pins too? Reply YES or NO."
+        )
+        return
 
     if state == "update_link":
         if not valid_affiliate_url(text):
             await update.message.reply_text("Send a valid Amazon affiliate URL.")
             return
         update_product(d["asin"], {"affiliateUrl": text})
-        clear_state(cid); await update.message.reply_text("✅ Affiliate link updated." + publish(d["asin"], "update")); return
+        publish_result = publish(d["asin"], "update")
+        d["state"] = "pinterest_update_confirm"
+        set_state(cid, d)
+        await update.message.reply_text(
+            "✅ Affiliate link updated." + publish_result + "\n\n"
+            "📌 Refresh Pinterest Pins too? Reply YES or NO."
+        )
+        return
 
     if state == "update_images":
         if text.upper() != "DONE":
@@ -555,7 +640,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text("❌ At least 1 image is required.")
             return
         update_product(d["asin"], {"images": d["images"]})
-        clear_state(cid); await update.message.reply_text("✅ Images updated." + publish(d["asin"], "update")); return
+        publish_result = publish(d["asin"], "update")
+        d["state"] = "pinterest_update_confirm"
+        set_state(cid, d)
+        await update.message.reply_text(
+            "✅ Images updated." + publish_result + "\n\n"
+            "📌 Refresh Pinterest Pins too? Reply YES or NO."
+        )
+        return
 
     if state == "update_all_name":
         d["new_name"] = clean(text, 160); d["state"] = "update_all_category"
@@ -589,14 +681,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "images": d["images"],
         }
         update_product(d["asin"], updates)
-        clear_state(cid)
-        await update.message.reply_text("✅ Product completely updated." + publish(d["asin"], "update")); return
+        publish_result = publish(d["asin"], "update")
+        d["state"] = "pinterest_update_confirm"
+        set_state(cid, d)
+        await update.message.reply_text(
+            "✅ Product completely updated." + publish_result + "\n\n"
+            "📌 Refresh Pinterest Pins too? Reply YES or NO."
+        )
+        return
 
     # DELETE
     if state == "delete_confirm":
         if text.upper() != "DELETE":
             clear_state(cid); await update.message.reply_text("Delete cancelled."); return
         asin = d["asin"]
+        old_pin_ids = get_pinterest_pins(asin)
         try:
             images = delete_product(asin)
             for path in images:
@@ -608,7 +707,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             return
 
         clear_state(cid)
-        # Tell Telegram immediately that the local deletion succeeded.
         await update.message.reply_text(
             f"🗑️ Product {asin} deleted locally.\n"
             "The product entry and its local images were removed."
@@ -616,6 +714,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         result = publish(asin, "delete")
         if result.strip():
             await update.message.reply_text(result.strip())
+
+        if old_pin_ids and pinterest_configured():
+            deleted = 0
+            failed = []
+            for pin_id in old_pin_ids:
+                try:
+                    delete_pin(pin_id)
+                    deleted += 1
+                except PinterestError as exc:
+                    failed.append(f"{pin_id}: {exc}")
+            remove_pinterest_pins(asin)
+            if failed:
+                await update.message.reply_text(
+                    f"⚠️ Website deletion is complete, but {len(failed)} Pinterest Pin(s) could not be removed."
+                )
+            else:
+                await update.message.reply_text(f"📌 Removed {deleted} Pinterest Pin(s) linked to {asin}.")
+        else:
+            remove_pinterest_pins(asin)
 
 
 def main() -> None:

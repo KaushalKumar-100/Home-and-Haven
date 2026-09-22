@@ -283,6 +283,22 @@ def pinterest_description(d: dict) -> str:
     return base[:500]
 
 
+def pinterest_product_data(asin: str) -> dict:
+    """Read the current public name/images from products.ts for Pinterest sync."""
+    _, _, block = find_block(asin)
+    name_match = re.search(r'\bname:\s*"((?:\\.|[^"])*)"', block)
+    if not name_match:
+        raise PinterestError(f"Could not read product name for {asin}.")
+    try:
+        name = json.loads('"'+name_match.group(1)+'"')
+    except json.JSONDecodeError as exc:
+        raise PinterestError(f"Could not decode product name for {asin}.") from exc
+    images = re.findall(r'"(/products/[^"]+)"', block)
+    if not images:
+        raise PinterestError(f"Product {asin} has no website images.")
+    return {"asin": asin, "name": name, "images": images, "category": "", "features": ""}
+
+
 def pinterest_upload(d: dict) -> tuple[int, list[str]]:
     if not pinterest_configured():
         raise PinterestError(
@@ -547,7 +563,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"Target: exactly {len(d['images'])} Pin(s), one per website image."
         )
         try:
-            count, _, deleted = pinterest_replace_upload(d)
+            pinterest_data = pinterest_product_data(d["asin"])
+            count, _, deleted = pinterest_replace_upload(pinterest_data)
             clear_state(cid)
             await update.message.reply_text(
                 f"🎉 Pinterest refresh complete!\n\n"

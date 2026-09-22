@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -55,13 +54,10 @@ export default function AutomatedProducts({ asins }: { asins: string[] }) {
             >
               <div className="relative h-72 overflow-hidden bg-[#eee9df]">
                 {product.images[0] && (
-                  <Image
+                  <img
                     src={product.images[0]}
                     alt={product.name}
-                    fill
-                    unoptimized
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover transition duration-500 group-hover:scale-105"
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                   />
                 )}
               </div>

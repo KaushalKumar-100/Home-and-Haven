@@ -590,9 +590,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if state == "pinterest_board_select":
         board = selected_pinterest_board(d, text)
+        if text.upper() in {"CANCEL", "NO"}:
+            clear_state(cid)
+            await update.message.reply_text("Pinterest action cancelled. The website change remains saved.")
+            return
         if not board:
             await update.message.reply_text(
-                "❌ Invalid board selection. Reply with the NUMBER shown above."
+                "❌ Invalid board selection. Reply with the NUMBER shown above, or CANCEL."
             )
             return
 
@@ -624,13 +628,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 )
             return
 
+        pinterest_data = pinterest_product_data(d["asin"])
         await update.message.reply_text(
             f"📌 Board selected: {board['name']}\n\n"
-            f"Refreshing Pinterest for {d['name']}...\n"
-            f"Target: exactly {len(d['images'])} Pin(s), one per website image."
+            f"Refreshing Pinterest for {pinterest_data['name']}...\n"
+            f"Target: exactly {len(pinterest_data['images'])} Pin(s), one per website image."
         )
         try:
-            pinterest_data = pinterest_product_data(d["asin"])
             count, _, deleted = pinterest_replace_upload(pinterest_data, board["id"])
             clear_state(cid)
             await update.message.reply_text(

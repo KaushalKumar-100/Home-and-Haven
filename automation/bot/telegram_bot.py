@@ -185,44 +185,6 @@ def append_product(draft: dict, image_path: str) -> None:
     PRODUCTS_FILE.write_text(updated, encoding="utf-8")
 
 
-def git_publish() -> tuple[bool, str]:
-    if os.getenv("AUTO_GIT_PUSH", "").lower() not in {"1", "true", "yes"}:
-        return False, "AUTO_GIT_PUSH is disabled."
-
-    commands = [
-        ["git", "add", "data/products.ts", "data/automatedAsins.ts", "public/products"],
-        ["git", "diff", "--cached", "--quiet"],
-    ]
-    try:
-        subprocess.run(commands[0], cwd=PROJECT_ROOT, check=True)
-        diff = subprocess.run(commands[1], cwd=PROJECT_ROOT)
-        if diff.returncode == 0:
-            return True, "Nothing new to publish."
-
-        message = f"Add affiliate product {draft['asin']}"  # type: ignore[name-defined]
-    except Exception:
-        return False, "Git staging failed."
-
-    try:
-        subprocess.run(
-            ["git", "commit", "-m", message],
-            cwd=PROJECT_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        subprocess.run(
-            ["git", "push"],
-            cwd=PROJECT_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return True, "Published to GitHub."
-    except subprocess.CalledProcessError as exc:
-        detail = (exc.stderr or exc.stdout or "unknown git error").strip()
-        return False, f"Git publish failed: {detail[-500:]}"
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:

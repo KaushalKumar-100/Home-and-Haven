@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900">
+<rect width="1200" height="900" fill="#eee9df"/>
+<circle cx="600" cy="370" r="150" fill="#faf9f6"/>
+<path d="M470 420h260l-35 170H505z" fill="#d4cec3"/>
+<path d="M500 420c20-95 180-95 200 0" fill="none" stroke="#8b806f" stroke-width="18"/>
+<text x="600" y="690" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" fill="#292722">Home &amp; Haven</text>
+<text x="600" y="745" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#777269">Product image coming soon</text>
+</svg>

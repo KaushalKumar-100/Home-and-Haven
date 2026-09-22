@@ -23,6 +23,7 @@ from automation.pinterest.client import (
     configured as pinterest_configured,
     create_image_pin,
     wait_until_public,
+    list_boards,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

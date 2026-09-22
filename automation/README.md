@@ -108,7 +108,7 @@ Pinterest is integrated as an organic Pin publisher. The bot uses the same user-
 - Access tokens are refreshed automatically before expiry.
 - HTTP 401 responses trigger a token refresh and retry; rate-limit responses are retried with a short backoff.
 
-Pinterest currently documents `boards:read`, `boards:write`, `pins:read`, and `pins:write` for creating and managing boards and Pins. urlPinterest create boards and Pins documentationhttps://developers.pinterest.com/docs/work-with-organic-content-and-users/create-boards-and-pins/
+Pinterest currently documents `boards:read`, `boards:write`, `pins:read`, and `pins:write` for creating and managing boards and Pins. https://developers.pinterest.com/docs/work-with-organic-content-and-users/create-boards-and-pins/
 
 ### One-time setup after app approval
 
@@ -118,7 +118,7 @@ Pinterest currently documents `boards:read`, `boards:write`, `pins:read`, and `p
 http://localhost:8765/pinterest/callback
 ```
 
-Pinterest requires the OAuth `redirect_uri` to exactly match a registered URI. urlPinterest OAuth setup documentationhttps://developers.pinterest.com/docs/getting-started/connect-app/
+Pinterest requires the OAuth `redirect_uri` to exactly match a registered URI. https://developers.pinterest.com/docs/getting-started/connect-app/
 
 2. In PowerShell, set the app credentials locally:
 
@@ -138,7 +138,7 @@ python -m automation.pinterest.oauth
 
 A browser window opens. Approve the requested Pinterest scopes. The helper exchanges the authorization code and stores the OAuth tokens in the git-ignored runtime directory.
 
-Pinterest's current OAuth flow returns an access token plus a refresh token; for apps created on or after September 25, 2025, the refresh token is a continuous-refresh token with a 60-day lifetime that can be refreshed indefinitely when maintained. urlPinterest authentication and token refresh documentationhttps://developers.pinterest.com/docs/getting-started/set-up-authentication-and-authorization/
+Pinterest's current OAuth flow returns an access token plus a refresh token; for apps created on or after September 25, 2025, the refresh token is a continuous-refresh token with a 60-day lifetime that can be refreshed indefinitely when maintained. https://developers.pinterest.com/docs/getting-started/set-up-authentication-and-authorization/
 
 4. Find the board ID:
 
@@ -172,7 +172,7 @@ Expected result:
 
 Then test a product with 2–5 images. The bot should create the same number of Pins as website images.
 
-Pinterest Trial access can create Pins, but Trial-created Pins are visible only to the creator. Standard access is needed when you want normal production visibility. urlPinterest access tiers documentationhttps://developers.pinterest.com/docs/key-concepts/access-tiers/
+Pinterest Trial access can create Pins, but Trial-created Pins are visible only to the creator. Standard access is needed when you want normal production visibility. https://developers.pinterest.com/docs/key-concepts/access-tiers/
 
 ### Environment summary
 

@@ -234,6 +234,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
+async def pinterest_boards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    try:
+        boards = list_boards()
+    except PinterestError as exc:
+        await update.message.reply_text(f"❌ Could not read Pinterest boards: {exc}")
+        return
+    if not boards:
+        await update.message.reply_text("No Pinterest boards were returned.")
+        return
+    lines = ["📌 Pinterest boards:"]
+    for board in boards:
+        lines.append(f"\n• {board.get('name', '(unnamed)')}\n  ID: {board.get('id', '')}")
+    await update.message.reply_text("\n".join(lines)[:3900])
+
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
         clear_state(update.effective_chat.id)
@@ -607,6 +624,7 @@ def main() -> None:
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cancel", cancel))
+    app.add_handler(CommandHandler("pinterest_boards", pinterest_boards))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

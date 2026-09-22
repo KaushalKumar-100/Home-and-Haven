@@ -153,6 +153,8 @@ def render_product(draft: dict, image_path: str) -> str:
     emoji = choose_emoji(draft["category"])
 
     tags_ts = ", ".join(ts_string(tag) for tag in tags)
+    image_values = draft.get("images") or [image_path]
+    images_ts = ", ".join(ts_string(value) for value in image_values)
     return f'''  {{
     id: {ts_string(product_id)},
     name: {ts_string(name)},
@@ -160,7 +162,7 @@ def render_product(draft: dict, image_path: str) -> str:
     price: {ts_string(draft["price"])},
     description: {ts_string(description)},
     emoji: {ts_string(emoji)},
-    images: [{ts_string(image_path)}],
+    images: [{images_ts}],
     affiliateUrl: {ts_string(draft["affiliate"])},
     featured: false,
     retailer: "Amazon.in",

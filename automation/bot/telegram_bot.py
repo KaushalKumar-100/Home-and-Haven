@@ -388,8 +388,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if state == "update_name_confirm":
         if text.upper() != "YES":
             clear_state(cid); await update.message.reply_text("Update cancelled."); return
-        update_product(d["asin"], {"name": d["new_name"]})
-        clear_state(cid); await update.message.reply_text("✅ Name updated." + publish(d["asin"], "update")); return
+        new_id = f"{slugify(d['new_name'])[:70]}-{d['asin'].lower()}"
+        update_product(d["asin"], {"name": d["new_name"], "id": new_id})
+        clear_state(cid); await update.message.reply_text("✅ Name and product ID updated." + publish(d["asin"], "update")); return
 
     if state == "update_details":
         parts = [x.strip() for x in text.split("|", 2)]

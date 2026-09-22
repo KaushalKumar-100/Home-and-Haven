@@ -32,11 +32,11 @@ Cloudflare Pages deployment
 4. Price you want displayed.
 5. Your Amazon affiliate link (SiteStripe is fine).
 6. Optional factual features.
-7. Optional product image that you own or have permission to use.
+7. 1–5 product images that you own or have permission to use.
 
 The bot generates the product description and tags from the information you provide. It does **not** scrape Amazon pages or download Amazon product images.
 
-If you type `SKIP` for the image, a neutral placeholder is used.
+At least one image is required for each new product.
 
 ## Run the bot
 

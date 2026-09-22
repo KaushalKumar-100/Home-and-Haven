@@ -2,20 +2,25 @@
 
 import os
 import re
+from pathlib import Path
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 from automation.product.asin import extract_asin
+from automation.product.catalog import product_exists_by_asin
+from automation.product.queue import enqueue_asin
 
 AMAZON_URL_RE = re.compile(r"https?://(?:www\.)?amazon\.in/[^\s]+", re.IGNORECASE)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PRODUCTS_FILE = PROJECT_ROOT / "data" / "products.ts"
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
         await update.message.reply_text(
             "🏠 Home & Haven automation bot is ready.\n\n"
-            "Send me an Amazon.in product URL and I will extract its ASIN."
+            "Send me an Amazon.in product URL and I will add it to the product intake queue."
         )
 
 
@@ -27,22 +32,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     match = AMAZON_URL_RE.search(text)
 
     if not match:
-        await update.message.reply_text(
-            "❌ Please send a valid Amazon.in product URL."
-        )
+        await update.message.reply_text("❌ Please send a valid Amazon.in product URL.")
         return
 
+    url = match.group(0)
+
     try:
-        asin = extract_asin(match.group(0))
+        asin = extract_asin(url)
     except ValueError as exc:
         await update.message.reply_text(f"❌ {exc}")
         return
 
+    products_source = PRODUCTS_FILE.read_text(encoding="utf-8")
+
+    if product_exists_by_asin(products_source, asin):
+        await update.message.reply_text(
+            f"⚠️ This ASIN is already in the Home & Haven catalog.\n\nASIN: {asin}"
+        )
+        return
+
+    added = enqueue_asin(asin, url)
+
+    if not added:
+        await update.message.reply_text(
+            f"⏳ This ASIN is already waiting in the intake queue.\n\nASIN: {asin}"
+        )
+        return
+
     await update.message.reply_text(
-        "✅ Amazon product detected!\n\n"
+        "✅ Product added to Home & Haven intake queue!\n\n"
         f"ASIN: {asin}\n\n"
-        "Next stage: connect the product-data provider. "
-        "The Telegram → URL → ASIN layer is working."
+        "Status: waiting for product-data provider.\n"
+        "The provider can later be replaced with Amazon Creators API without changing this Telegram layer."
     )
 
 

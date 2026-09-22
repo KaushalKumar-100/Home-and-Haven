@@ -8,6 +8,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 from automation.product.asin import extract_asin
+from automation.product.asin_catalog import add_asin
 from automation.product.catalog import product_exists_by_asin
 from automation.product.queue import enqueue_asin
 
@@ -20,7 +21,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
         await update.message.reply_text(
             "🏠 Home & Haven automation bot is ready.\n\n"
-            "Send me an Amazon.in product URL and I will add it to the product intake queue."
+            "Send me an Amazon.in product URL and I will add its ASIN to the automation pipeline."
         )
 
 
@@ -51,19 +52,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         return
 
-    added = enqueue_asin(asin, url)
+    added_to_queue = enqueue_asin(asin, url)
+    added_to_catalog = add_asin(asin)
 
-    if not added:
+    if not added_to_queue and not added_to_catalog:
         await update.message.reply_text(
-            f"⏳ This ASIN is already waiting in the intake queue.\n\nASIN: {asin}"
+            f"⏳ This ASIN is already in the automation pipeline.\n\nASIN: {asin}"
         )
         return
 
     await update.message.reply_text(
-        "✅ Product added to Home & Haven intake queue!\n\n"
+        "✅ Product added to Home & Haven automation!\n\n"
         f"ASIN: {asin}\n\n"
-        "Status: waiting for product-data provider.\n"
-        "The provider can later be replaced with Amazon Creators API without changing this Telegram layer."
+        "The website now has the ASIN in its durable catalog. "
+        "When Amazon Creators API credentials are available, the site can fetch the current product data server-side."
     )
 
 

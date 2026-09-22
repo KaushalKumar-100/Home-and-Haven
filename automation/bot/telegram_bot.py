@@ -18,6 +18,12 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Messa
 from automation.product.asin import extract_asin
 from automation.product.asin_catalog import add_asin
 from automation.product.catalog import product_exists_by_asin, slugify
+from automation.pinterest.client import (
+    PinterestError,
+    configured as pinterest_configured,
+    create_image_pin,
+    wait_until_public,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PRODUCTS_FILE = PROJECT_ROOT / "data" / "products.ts"
@@ -244,16 +250,71 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+def site_base_url() -> str:
+    return os.getenv("SITE_BASE_URL", "https://home-and-haven.pages.dev").rstrip("/")
+
+
+def product_public_id(d: dict) -> str:
+    return f"{slugify(d['name'])[:70]}-{d['asin'].lower()}"
+
+
+def pinterest_description(d: dict) -> str:
+    base = description(d["name"], d["category"], d.get("features", ""))
+    return base[:500]
+
+
+def pinterest_upload(d: dict) -> tuple[int, list[str]]:
+    if not pinterest_configured():
+        raise PinterestError(
+            "Pinterest is not configured. Set PINTEREST_ACCESS_TOKEN and PINTEREST_BOARD_ID."
+        )
+
+    base = site_base_url()
+    image_urls = [f"{base}{path}" for path in d["images"]]
+    if not wait_until_public(image_urls, timeout_seconds=180):
+        raise PinterestError(
+            "The website images are not publicly reachable yet. "
+            "Cloudflare may still be deploying."
+        )
+
+    link = f"{base}/products/{product_public_id(d)}"
+    pin_ids: list[str] = []
+    board_id = os.environ["PINTEREST_BOARD_ID"]
+
+    for index, image_url in enumerate(image_urls, start=1):
+        pin_id = create_image_pin(
+            board_id=board_id,
+            image_url=image_url,
+            link=link,
+            title=d["name"],
+            description=pinterest_description(d),
+        )
+        pin_ids.append(pin_id)
+
+    return len(pin_ids), pin_ids
+
+
 async def finish_add(update: Update, d: dict) -> None:
     try:
         append_product(d)
-        clear_state(update.effective_chat.id)
-        await update.message.reply_text(
-            f"✅ PRODUCT ADDED\n\n{d['name']}\nASIN: {d['asin']}\n"
-            f"Images: {len(d['images'])}/5" + publish(d["asin"], "add")
-        )
     except Exception as exc:
         await update.message.reply_text(f"❌ Could not add product: {exc}")
+        return
+
+    # Keep the draft alive until the Pinterest decision is made.
+    d["state"] = "pinterest_confirm"
+    set_state(update.effective_chat.id, d)
+
+    publish_result = publish(d["asin"], "add")
+    await update.message.reply_text(
+        f"✅ PRODUCT ADDED\n\n"
+        f"{d['name']}\n"
+        f"ASIN: {d['asin']}\n"
+        f"Website images: {len(d['images'])}/5\n"
+        f"{publish_result}\n\n"
+        "📌 Should I upload these images to Pinterest too?\n"
+        "Reply YES or NO."
+    )
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -377,6 +438,46 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text("❌ At least 1 image is compulsory.")
             return
         await finish_add(update, d)
+        return
+
+    if state == "pinterest_confirm":
+        choice = text.upper()
+        if choice in {"NO", "N", "CANCEL"}:
+            clear_state(cid)
+            await update.message.reply_text("✅ Product is live on the website. Pinterest upload skipped.")
+            return
+        if choice not in {"YES", "Y"}:
+            await update.message.reply_text("Reply YES to upload all product images to Pinterest, or NO to skip.")
+            return
+
+        if not pinterest_configured():
+            await update.message.reply_text(
+                "⚠️ Pinterest is not configured yet.\n\n"
+                "I need PINTEREST_ACCESS_TOKEN and PINTEREST_BOARD_ID. "
+                "After you configure them, add the product again or use the Pinterest upload command."
+            )
+            clear_state(cid)
+            return
+
+        await update.message.reply_text(
+            f"📌 Uploading {len(d['images'])} images to Pinterest...\n"
+            "I will create exactly one Pin per website image."
+        )
+        try:
+            count, pin_ids = pinterest_upload(d)
+            clear_state(cid)
+            await update.message.reply_text(
+                f"🎉 Pinterest upload complete!\n\n"
+                f"Product: {d['name']}\n"
+                f"Pins created: {count}\n"
+                f"Images on website: {len(d['images'])}"
+            )
+        except PinterestError as exc:
+            await update.message.reply_text(
+                f"❌ Pinterest upload did not complete.\n\n{exc}\n\n"
+                "The product and website images are already saved."
+            )
+            clear_state(cid)
         return
 
     # UPDATE

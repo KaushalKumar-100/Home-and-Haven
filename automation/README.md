@@ -40,20 +40,38 @@ At least one image is required for each new product.
 
 ## Run the bot
 
-From the repository root:
+From the repository root, install the automation dependencies and create a local configuration file:
 
 ```powershell
-git switch automation-foundation
-.\.venv\Scripts\Activate.ps1
-$env:TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN"
-python -m automation.bot.telegram_bot
+git switch automation-hardening
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r automation\requirements.txt
+Copy-Item automation\.env.example automation\.env
+notepad automation\.env
 ```
+
+Fill in the values in `automation\.env` locally. Set `TELEGRAM_ALLOWED_USER_IDS` to your numeric Telegram user ID before starting; do not leave both allowlist variables blank. Keep this file private—it is git-ignored.
+
+Start the bot with:
+
+```powershell
+.\automation\run_bot.ps1
+```
+
+The bot runs while this process is open and the laptop is awake and connected to the internet.
+
+The bot now refuses to start unless you configure at least one Telegram allowlist variable. Set your numeric user ID in `TELEGRAM_ALLOWED_USER_IDS` (recommended for a private bot) before starting.
 
 Useful Telegram commands:
 
 - `/start` — instructions
 - `/status` — show the current draft
 - `/cancel` — discard the current draft
+- `/pinterest_boards` — list available Pinterest boards
+
+### Telegram authorization
+
+Set `TELEGRAM_ALLOWED_USER_IDS` and/or `TELEGRAM_ALLOWED_CHAT_IDS` to comma-separated numeric IDs. When either list is configured, messages must match every configured list. Obtain your numeric user ID from a trusted Telegram ID bot or your own bot logs; do not post it publicly. If both variables are blank, the bot denies all users and refuses to start; configure at least one allowlist before running it.
 
 Draft state is stored under `automation/runtime/`, which is git-ignored.
 
@@ -67,7 +85,7 @@ For hands-off publishing, set:
 $env:AUTO_GIT_PUSH="1"
 ```
 
-The bot then runs the normal local `git add`, `git commit`, and `git push`. Your machine must already have permission to push to the repository (for example, Git Credential Manager or SSH authentication).
+The bot then runs the normal local `git add`, `git commit`, and `git push`. Your machine must already have permission to push to the repository (for example, Git Credential Manager or SSH authentication). The process only commits the product catalog and `public/products` assets; use a dedicated clone/working tree and ensure no unrelated staged changes exist before starting the bot, because a Git commit will include all staged changes.
 
 Cloudflare Pages can then deploy the pushed commit if your project is connected to this GitHub repository.
 
@@ -173,6 +191,21 @@ Expected result:
 Then test a product with 2–5 images. The bot should create the same number of Pins as website images.
 
 Pinterest Trial access can create Pins, but Trial-created Pins are visible only to the creator. Standard access is needed when you want normal production visibility. https://developers.pinterest.com/docs/key-concepts/access-tiers/
+
+### Safe rollout checklist
+
+1. Start with a separate local clone/working tree and the `automation-hardening` branch; do not point live traffic at an unreviewed branch.
+2. Set a Telegram user ID allowlist before running the bot. Run one ADD with a single image using an image you own or are licensed to publish.
+3. Confirm the website deploys from the branch you intended and that the configured `SITE_BASE_URL` matches the real public domain.
+4. Connect Pinterest through OAuth, then use `/pinterest_boards` to select the intended board.
+5. With Trial access, treat Pins as developer-only test artifacts. Request Standard access before relying on Pinterest for public marketing reach.
+6. Test UPDATE and DELETE on a disposable test product before operating on important catalog entries.
+
+The bot runs by polling Telegram, so it stays online only while its Python process and host are running. With your current laptop setup, keep the terminal open, prevent sleep while it is running, and maintain an internet connection. If Windows restarts or the laptop sleeps, the bot stops until you start it again. For 24/7 operation, move it to an always-on host after the secrets and permissions have been configured.
+
+### Automated tests
+
+A GitHub Actions workflow runs the Python authorization tests on changes to the automation code. Check the pull request's **Checks** tab before merging. These tests do not publish Pins or contact Amazon/Pinterest APIs.
 
 ### Environment summary
 

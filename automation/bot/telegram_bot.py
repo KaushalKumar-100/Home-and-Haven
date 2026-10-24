@@ -852,11 +852,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     failed.append(f"{pin_id}: {exc}")
             if failed:
                 # Keep failed IDs in the local registry so they can be retried manually.
-                remaining = [pin_id for pin_id in old_pin_ids if pin_id not in {
-                    candidate for candidate in old_pin_ids
-                    if candidate not in {entry.split(": ", 1)[0] for entry in failed}
-                }]
-                set_pinterest_pins(asin, [entry.split(": ", 1)[0] for entry in failed])
+                failed_ids = [entry.split(": ", 1)[0] for entry in failed]
+                set_pinterest_pins(asin, failed_ids)
                 await update.message.reply_text(
                     f"⚠️ Website deletion is complete, but {len(failed)} Pinterest Pin(s) could not be removed. "
                     "Their IDs remain tracked so cleanup can be retried."

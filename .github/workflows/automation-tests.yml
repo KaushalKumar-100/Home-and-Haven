@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - automation-hardening
+      - automation-foundation
     paths:
       - "automation/**"
       - ".github/workflows/automation-tests.yml"

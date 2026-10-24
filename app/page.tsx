@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import Navbar from "@/app/components/Navbar";
 import { products } from "@/data/products";
+import AutomatedProducts from "@/app/components/AutomatedProducts";
+import { automatedAsins } from "@/data/automatedAsins";
 
 const categories = [
   {
@@ -249,6 +251,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <AutomatedProducts asins={automatedAsins} />
 
       {/* Guides */}
       <section id="guides" className="bg-[#292722] px-6 py-20 text-white">

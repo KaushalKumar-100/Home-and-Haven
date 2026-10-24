@@ -93,15 +93,20 @@ def _headers(force_refresh: bool = False) -> dict[str, str]:
 
 
 def _request(method: str, path: str, **kwargs):
+    """Send a Pinterest request with bounded retries and stable request kwargs."""
     refreshed = False
+    timeout = kwargs.pop("timeout", 30)
+    # Preserve caller arguments unchanged across retries.
+    request_kwargs = dict(kwargs)
+
     for attempt in range(3):
         try:
             response = requests.request(
                 method,
                 f"{API_BASE}{path}",
                 headers=_headers(force_refresh=refreshed),
-                timeout=kwargs.pop("timeout", 30),
-                **kwargs,
+                timeout=timeout,
+                **request_kwargs,
             )
         except requests.RequestException as exc:
             if attempt == 2:
@@ -119,7 +124,7 @@ def _request(method: str, path: str, **kwargs):
             retry_after = response.headers.get("Retry-After", "2")
             try:
                 delay = min(max(int(float(retry_after)), 1), 30)
-            except ValueError:
+            except (TypeError, ValueError):
                 delay = 2
             time.sleep(delay)
             continue

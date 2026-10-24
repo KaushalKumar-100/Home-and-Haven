@@ -44,8 +44,9 @@ def allowed_user(update: Update) -> bool:
     """
     allowed_users = {v.strip() for v in os.getenv("TELEGRAM_ALLOWED_USER_IDS", "").split(",") if v.strip()}
     allowed_chats = {v.strip() for v in os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "").split(",") if v.strip()}
+    # Fail closed: never allow catalog mutations/publishing with no configured allowlist.
     if not allowed_users and not allowed_chats:
-        return True
+        return False
     user_id = str(update.effective_user.id) if update.effective_user else ""
     chat_id = str(update.effective_chat.id) if update.effective_chat else ""
     if allowed_users and user_id not in allowed_users:
@@ -871,6 +872,10 @@ def main() -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         raise SystemExit("TELEGRAM_BOT_TOKEN is not set.")
+    if not os.getenv("TELEGRAM_ALLOWED_USER_IDS", "").strip() and not os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "").strip():
+        raise SystemExit(
+            "Configure TELEGRAM_ALLOWED_USER_IDS and/or TELEGRAM_ALLOWED_CHAT_IDS before starting the bot."
+        )
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cancel", cancel))

@@ -13,6 +13,7 @@ which is git-ignored. Never commit or paste them into chat.
 """
 
 import os
+from pathlib import Path
 import secrets
 import threading
 import urllib.parse
@@ -20,8 +21,12 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import requests
+from dotenv import load_dotenv
 
 from automation.pinterest.token_store import save
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(PROJECT_ROOT / "automation" / ".env")
 
 API_BASE = "https://api.pinterest.com/v5"
 DEFAULT_REDIRECT_URI = "http://localhost:8765/pinterest/callback"

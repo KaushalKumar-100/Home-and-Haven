@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -33,6 +34,7 @@ PRODUCTS_FILE = PROJECT_ROOT / "data" / "products.ts"
 CATALOG_FILE = PROJECT_ROOT / "data" / "automatedAsins.ts"
 STATE_FILE = PROJECT_ROOT / "automation" / "runtime" / "drafts.json"
 IMAGE_DIR = PROJECT_ROOT / "public" / "products"
+load_dotenv(PROJECT_ROOT / "automation" / ".env")
 AMAZON_URL_RE = re.compile(r"https?://(?:www\.)?amazon\.in/[^\s]+", re.I)
 
 

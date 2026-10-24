@@ -32,4 +32,4 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r automation/requirements.txt pytest
       - name: Run automation unit tests
-        run: python -m pytest -q automation/bot/test_authorization.py
+        run: python -m pytest -q automation

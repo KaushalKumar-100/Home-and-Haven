@@ -57,12 +57,12 @@ Useful Telegram commands:
 
 - `/start` — instructions
 - `/status` — show the current draft
+- `/cancel` — discard the current draft
 - `/pinterest_boards` — list available Pinterest boards
 
 ### Telegram authorization
 
 Set `TELEGRAM_ALLOWED_USER_IDS` and/or `TELEGRAM_ALLOWED_CHAT_IDS` to comma-separated numeric IDs. When either list is configured, messages must match every configured list. Obtain your numeric user ID from a trusted Telegram ID bot or your own bot logs; do not post it publicly. If both variables are blank, the bot remains open to any Telegram user who can message it, so configure at least one allowlist before enabling auto-publishing.
-- `/cancel` — discard the current draft
 
 Draft state is stored under `automation/runtime/`, which is git-ignored.
 

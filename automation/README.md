@@ -43,7 +43,7 @@ At least one image is required for each new product.
 From the repository root:
 
 ```powershell
-git switch automation-foundation
+git switch automation-hardening
 .\.venv\Scripts\Activate.ps1
 $env:TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN"
 # Recommended: restrict use to your own Telegram account/chat before enabling publishing.
@@ -52,6 +52,8 @@ $env:AUTO_GIT_PUSH="1"
 $env:SITE_BASE_URL="https://home-and-haven.pages.dev"
 python -m automation.bot.telegram_bot
 ```
+
+The bot now refuses to start unless you configure at least one Telegram allowlist variable. Set your numeric user ID in `TELEGRAM_ALLOWED_USER_IDS` (recommended for a private bot) before starting.
 
 Useful Telegram commands:
 
@@ -193,6 +195,10 @@ Pinterest Trial access can create Pins, but Trial-created Pins are visible only 
 6. Test UPDATE and DELETE on a disposable test product before operating on important catalog entries.
 
 The bot runs by polling Telegram, so it stays online only while its Python process and host are running. For 24/7 operation, move it to an always-on host after the secrets and permissions have been configured.
+
+### Automated tests
+
+A GitHub Actions workflow runs the Python authorization tests on changes to the automation code. Check the pull request's **Checks** tab before merging. These tests do not publish Pins or contact Amazon/Pinterest APIs.
 
 ### Environment summary
 

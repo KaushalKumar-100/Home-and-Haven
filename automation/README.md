@@ -43,7 +43,7 @@ At least one image is required for each new product.
 From the repository root, install the automation dependencies and create a local configuration file:
 
 ```powershell
-git switch automation-hardening
+git switch automation-foundation
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r automation\requirements.txt
 Copy-Item automation\.env.example automation\.env

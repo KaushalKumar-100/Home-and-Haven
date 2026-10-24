@@ -33,9 +33,34 @@ PRODUCTS_FILE = PROJECT_ROOT / "data" / "products.ts"
 CATALOG_FILE = PROJECT_ROOT / "data" / "automatedAsins.ts"
 STATE_FILE = PROJECT_ROOT / "automation" / "runtime" / "drafts.json"
 IMAGE_DIR = PROJECT_ROOT / "public" / "products"
-AMAZON_URL_RE = re.compile(r"https?://(?:www\.)?amazon\.in/[^\s]+", re.I)
+AMAZON_URL_RE = re.compile(r"https?://(?:www\\.)?amazon\\.in/[^\\s]+", re.I)
 
 
+def allowed_user(update: Update) -> bool:
+    """Return True when no allowlist is configured or sender/chat is allowlisted.
+
+    Set TELEGRAM_ALLOWED_USER_IDS and/or TELEGRAM_ALLOWED_CHAT_IDS to comma-separated
+    numeric IDs. If either variable is set, every configured list must match.
+    """
+    allowed_users = {v.strip() for v in os.getenv("TELEGRAM_ALLOWED_USER_IDS", "").split(",") if v.strip()}
+    allowed_chats = {v.strip() for v in os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "").split(",") if v.strip()}
+    if not allowed_users and not allowed_chats:
+        return True
+    user_id = str(update.effective_user.id) if update.effective_user else ""
+    chat_id = str(update.effective_chat.id) if update.effective_chat else ""
+    if allowed_users and user_id not in allowed_users:
+        return False
+    if allowed_chats and chat_id not in allowed_chats:
+        return False
+    return bool(user_id or chat_id)
+
+
+async def deny_unless_allowed(update: Update) -> bool:
+    if allowed_user(update):
+        return False
+    if update.effective_message:
+        await update.effective_message.reply_text("⛔ This bot is not authorized for your Telegram account/chat.")
+    return True
 def load_state() -> dict:
     if not STATE_FILE.exists():
         return {}
@@ -227,6 +252,8 @@ def parse_asin(value: str) -> str:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await deny_unless_allowed(update):
+        return
     if update.message:
         await update.message.reply_text(
             "🏠 HOME & HAVEN PRODUCT MANAGER\n\n"
@@ -238,6 +265,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def pinterest_boards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await deny_unless_allowed(update):
+        return
     if not update.message:
         return
     try:
@@ -255,12 +284,16 @@ async def pinterest_boards(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await deny_unless_allowed(update):
+        return
     if update.message:
         clear_state(update.effective_chat.id)
         await update.message.reply_text("Cancelled. Send ADD, UPDATE or DELETE.")
 
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await deny_unless_allowed(update):
+        return
     if not update.message:
         return
     d = get_state(update.effective_chat.id)
@@ -424,6 +457,8 @@ async def finish_add(update: Update, d: dict) -> None:
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await deny_unless_allowed(update):
+        return
     if not update.message or not update.message.photo:
         return
     d = get_state(update.effective_chat.id)
@@ -448,6 +483,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await deny_unless_allowed(update):
+        return
     if not update.message:
         return
     text = (update.message.text or "").strip()
@@ -813,15 +850,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     deleted += 1
                 except PinterestError as exc:
                     failed.append(f"{pin_id}: {exc}")
-            remove_pinterest_pins(asin)
             if failed:
+                # Keep failed IDs in the local registry so they can be retried manually.
+                remaining = [pin_id for pin_id in old_pin_ids if pin_id not in {
+                    candidate for candidate in old_pin_ids
+                    if candidate not in {entry.split(": ", 1)[0] for entry in failed}
+                }]
+                set_pinterest_pins(asin, [entry.split(": ", 1)[0] for entry in failed])
                 await update.message.reply_text(
-                    f"⚠️ Website deletion is complete, but {len(failed)} Pinterest Pin(s) could not be removed."
+                    f"⚠️ Website deletion is complete, but {len(failed)} Pinterest Pin(s) could not be removed. "
+                    "Their IDs remain tracked so cleanup can be retried."
                 )
             else:
+                remove_pinterest_pins(asin)
                 await update.message.reply_text(f"📌 Removed {deleted} Pinterest Pin(s) linked to {asin}.")
         else:
-            remove_pinterest_pins(asin)
+            # Never discard known Pin IDs just because Pinterest is temporarily unavailable.
+            if not old_pin_ids:
+                remove_pinterest_pins(asin)
 
 
 def main() -> None:

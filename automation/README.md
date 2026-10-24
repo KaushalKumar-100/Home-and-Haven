@@ -71,7 +71,7 @@ Useful Telegram commands:
 
 ### Telegram authorization
 
-Set `TELEGRAM_ALLOWED_USER_IDS` and/or `TELEGRAM_ALLOWED_CHAT_IDS` to comma-separated numeric IDs. When either list is configured, messages must match every configured list. Obtain your numeric user ID from a trusted Telegram ID bot or your own bot logs; do not post it publicly. If both variables are blank, the bot remains open to any Telegram user who can message it, so configure at least one allowlist before enabling auto-publishing.
+Set `TELEGRAM_ALLOWED_USER_IDS` and/or `TELEGRAM_ALLOWED_CHAT_IDS` to comma-separated numeric IDs. When either list is configured, messages must match every configured list. Obtain your numeric user ID from a trusted Telegram ID bot or your own bot logs; do not post it publicly. If both variables are blank, the bot denies all users and refuses to start; configure at least one allowlist before running it.
 
 Draft state is stored under `automation/runtime/`, which is git-ignored.
 

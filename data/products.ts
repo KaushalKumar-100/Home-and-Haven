@@ -176,4 +176,18 @@ export const products: Product[] = [
     asin: "B0BRNCBF1Y",
     tags: ["amata", "marino", "seater", "ocean", "blue", "suede", "velvet", "fabric"],
   },
+  {
+    id: "moonlitdreams-3-meter-led-rope-light-for-decoration-waterproof-warm-wh-b0gyjp4s8h",
+    name: "MoonlitDreams 3 Meter LED Rope Light for Decoration – Waterproof Warm White SMD Cove Light for Ceiling, Home Décor, LED Pipe Light for Diwali, Festival, Indoor,",
+    category: "lighting",
+    price: "₹189",
+    description: "MoonlitDreams 3 Meter LED Rope Light for Decoration – Waterproof Warm White SMD Cove Light for Ceiling, Home Décor, LED Pipe Light for Diwali, Festival, Indoor, is a Lighting find selected for practical everyday use and home styling. Key details: 📦 Package Contains: 1 x 3 Meter MoonlitDreamsLED Rope Light (Warm White, Plug-in Type) 💡 3 Meter Long Strip Light: Offers extensive coverage for decorating ceilings, balconies, halls, and more. 🌟 Bright & Energy Efficient SMD LEDs: Provides powerful illumination while consuming less energy. 🌧 Waterproof Construction: Safe for both indoor and outdoor use, including terraces and verandahs. 🔌 Easy to Install & Use – Comes with a plug-and-play setup; no electrician required. Simply plug into a stand.",
+    emoji: "💡",
+    images: ["/products/moonlitdreams-3-meter-led-rope-light-for-decoration-waterpro-b0gyjp4s8h-1.jpg"],
+    affiliateUrl: "https://link.amazon/B0fEWhzGH",
+    featured: false,
+    retailer: "Amazon.in",
+    asin: "B0GYJP4S8H",
+    tags: ["moonlitdreams", "meter", "led", "rope", "light", "decoration", "waterproof", "warm"],
+  },
 ];

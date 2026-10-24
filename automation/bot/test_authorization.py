@@ -13,10 +13,10 @@ def make_update(user_id=None, chat_id=None):
     return SimpleNamespace(effective_user=user, effective_chat=chat)
 
 
-def test_allowlist_is_open_when_no_ids_configured(monkeypatch):
+def test_allowlist_denies_everyone_when_no_ids_configured(monkeypatch):
     monkeypatch.delenv("TELEGRAM_ALLOWED_USER_IDS", raising=False)
     monkeypatch.delenv("TELEGRAM_ALLOWED_CHAT_IDS", raising=False)
-    assert allowed_user(make_update(10, 20))
+    assert not allowed_user(make_update(10, 20))
 
 
 def test_user_allowlist_blocks_unknown_user(monkeypatch):

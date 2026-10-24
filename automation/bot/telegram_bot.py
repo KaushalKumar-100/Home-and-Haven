@@ -33,7 +33,7 @@ PRODUCTS_FILE = PROJECT_ROOT / "data" / "products.ts"
 CATALOG_FILE = PROJECT_ROOT / "data" / "automatedAsins.ts"
 STATE_FILE = PROJECT_ROOT / "automation" / "runtime" / "drafts.json"
 IMAGE_DIR = PROJECT_ROOT / "public" / "products"
-AMAZON_URL_RE = re.compile(r"https?://(?:www\\.)?amazon\\.in/[^\\s]+", re.I)
+AMAZON_URL_RE = re.compile(r"https?://(?:www\.)?amazon\.in/[^\s]+", re.I)
 
 
 def allowed_user(update: Update) -> bool:
